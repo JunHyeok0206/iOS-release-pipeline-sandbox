@@ -1,0 +1,83 @@
+# master 에 push(= release → master PR 머지)되면 태그·GitHub Release 생성, release-x.y.z 삭제
+name: Release Finish
+run-name: "Release Finish: ${{ github.event.head_commit.message }}"
+
+on:
+  push:
+    branches: [master]
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  finish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERSION_XCCONFIG: Config/Version.xcconfig
+      HEAD_MSG: ${{ github.event.head_commit.message }}
+    steps:
+      - uses: actions/checkout@v5
+
+      # master 의 Version.xcconfig 가 곧 배포 버전. 같은 태그가 있으면 release 머지가 아닌 push 이므로 건너뜀
+      - name: Resolve version
+        id: v
+        run: |
+          VERSION=$(sed -n 's/^MARKETING_VERSION *= *//p' "$VERSION_XCCONFIG")
+          BUILD=$(sed -n 's/^CURRENT_PROJECT_VERSION *= *//p' "$VERSION_XCCONFIG")
+          [ -n "$VERSION" ] || { echo "::error::$VERSION_XCCONFIG 에서 MARKETING_VERSION 을 읽지 못했습니다"; exit 1; }
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "build=$BUILD" >> "$GITHUB_OUTPUT"
+          if gh release view "$VERSION" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"; echo "Release $VERSION 이미 존재 → 건너뜀"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # 본문: 배포일 + 머지된 PR 본문의 "🔧 변경 사항" 절. PR 을 못 찾으면 --generate-notes
+      - name: Create tag and GitHub Release
+        if: steps.v.outputs.exists == 'false'
+        env:
+          VERSION: ${{ steps.v.outputs.version }}
+        run: |
+          PR=$(printf '%s' "$HEAD_MSG" | sed -nE '1s/^Merge pull request #([0-9]+).*/\1/p')
+          NOTES=""
+          if [ -n "$PR" ]; then
+            NOTES=$(gh pr view "$PR" -R "$GITHUB_REPOSITORY" --json body -q .body \
+              | awk '/^## 🔧 변경 사항/{f=1; next} /^## /{f=0} f' | sed '/^[[:space:]]*$/d')
+          fi
+          {
+            echo "배포일"; echo "* $(TZ=Asia/Seoul date '+%Y/%m/%d')"; echo; echo "반영사항"
+            [ -n "$NOTES" ] && printf '%s\n' "$NOTES"
+          } > /tmp/release-notes.md
+          if [ -n "$NOTES" ]; then
+            gh release create "$VERSION" -R "$GITHUB_REPOSITORY" --target master --title "$VERSION" --notes-file /tmp/release-notes.md
+          else
+            gh release create "$VERSION" -R "$GITHUB_REPOSITORY" --target master --title "$VERSION" --notes-file /tmp/release-notes.md --generate-notes
+          fi
+
+      - name: Delete release-x.y.z
+        env:
+          VERSION: ${{ steps.v.outputs.version }}
+        run: |
+          REF="heads/release-$VERSION"
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/$REF" >/dev/null 2>&1; then
+            gh api -X DELETE "repos/$GITHUB_REPOSITORY/git/refs/$REF" && echo "release-$VERSION 삭제"
+          else
+            echo "release-$VERSION 없음 → 건너뜀"
+          fi
+
+      - name: Summary
+        env:
+          VERSION: ${{ steps.v.outputs.version }}
+          BUILD: ${{ steps.v.outputs.build }}
+          EXISTS: ${{ steps.v.outputs.exists }}
+        run: |
+          {
+            echo "## Release Finish $VERSION ($BUILD)"
+            echo
+            if [ "$EXISTS" = "true" ]; then echo "- Release $VERSION 이미 존재 → 생성 건너뜀"; else echo "- Release: ${{ github.server_url }}/${{ github.repository }}/releases/tag/$VERSION"; fi
+            echo "- 트리거 커밋: ${{ github.sha }}"
+          } >> "$GITHUB_STEP_SUMMARY"

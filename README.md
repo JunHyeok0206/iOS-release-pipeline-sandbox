@@ -10,7 +10,8 @@
 | `Project.swift` | Tuist 4.12.1. 앱 `TestApp` + 위젯 `TestWidget` |
 | `Config/Version.xcconfig` | `MARKETING_VERSION` / `CURRENT_PROJECT_VERSION`. 두 Info.plist 가 `$(…)` 로 참조. **CI 만 수정** |
 | `fastlane/Fastfile` | `bump`, `firebase`(stub), `test_flight`(stub) |
-| `Makefile` | 아래 명령어 표. 태그·GitHub Release 도 여기서 만든다 (`github-release`) |
+| `Makefile` | 아래 명령어 표 |
+| `.github/workflows/release-finish.yml` | `master` push 시 태그·GitHub Release 생성, `release-x.y.z` 삭제 (5절) |
 | `scripts/pr-body.sh` | Makefile 이 여는 PR 의 제목·본문 생성 (5절 "PR 제목·본문") |
 | `.github/workflows/release-start.yml` | 릴리스 시작 (3절) |
 | `.github/workflows/deploy.yml` | 배포 (5절) |
@@ -29,8 +30,10 @@ develop ─┬─ make release-start version=1.0.1
          │  빌드 필요할 때: make qa-deploy branch=release-1.0.1  → "(2)", "(3)" …
          │
          │  마지막 qa-deploy 빌드가 제출 빌드다
-         └─ make release-finish branch=release-1.0.1 notes="- 항목1\n- 항목2"
-               → release → master 머지 → 태그·GitHub Release 생성 → release → develop 머지 → release-1.0.1 삭제
+         └─ make release-finish thread=<slack url>
+               → release → master, release → develop PR 생성
+               → 리뷰 승인 → GitHub 에서 두 PR 머지
+               → master push 로 Release Finish 워크플로: 태그·GitHub Release 생성, release-1.0.1 삭제
 ```
 
 | 브랜치 | 역할 | 누가 커밋하나 |
@@ -38,7 +41,7 @@ develop ─┬─ make release-start version=1.0.1
 | `develop` | 기능 개발 | 개발자 (PR) |
 | `release-x.y.z` | 버전별 QA 작업. 수정 PR 의 base. **Version.xcconfig 를 건드리지 않는다** | 개발자 (PR) |
 | `release` | 배포 전용. 여기 push 되면 Deploy 가 돈다 | **머지 커밋과 CI 의 bump 커밋만** |
-| `master` | 기본 브랜치, 상용 | `make release-finish` |
+| `master` | 기본 브랜치, 상용 | `release → master` PR 머지 (승인 1명) |
 
 ## 3. 명령어
 
@@ -52,7 +55,7 @@ develop ─┬─ make release-start version=1.0.1
 | `make qa-deploy [branch=release-x.y.z]` | QA 수정분 배포. `release-x.y.z → release` PR 머지 → Deploy. branch 생략 시 현재 브랜치 |
 | `make deploy [lane=both\|firebase\|test_flight]` | 코드 변경 없이 재배포. 빌드 번호만 +1 |
 | `make deploy-firebase` / `make deploy-testflight` | 위의 단축 |
-| `make release-finish [branch=release-x.y.z] [notes="…"] [thread=<slack url>]` | 마감. `release → master`·`release → develop` PR 을 열고 → master 머지 → 태그·GitHub Release 생성 → develop 머지 → `release-x.y.z` 삭제. master/develop 에 리뷰 승인 규칙이 있으면 PR URL 을 안내하고 멈춘다. **승인 후 같은 명령을 다시 실행**하면 이어서 진행. 재실행해도 안전(이미 머지된 방향·이미 있는 Release·이미 삭제된 브랜치는 건너뜀) |
+| `make release-finish [thread=<slack url>]` | 마감 시작. `release → master`·`release → develop` PR 두 개를 연다 (제목·본문 자동). 이후는 승인 → GitHub 에서 머지 → Release Finish 워크플로가 마무리. 재실행하면 이미 열린 PR URL 만 다시 보여준다 |
 | `make runs` | 최근 실행 10개 |
 | `make generate` | 로컬 Tuist 프로젝트 생성 |
 
@@ -62,10 +65,7 @@ develop ─┬─ make release-start version=1.0.1
 
 | 명령 | 하는 일 |
 |---|---|
-| `make github-release [notes="…"]` | [문제가 발생하지 않는 한 개발자가 직접 실행하지 않음] master 의 `Version.xcconfig` 버전으로 태그 + GitHub Release 만 생성. `release-finish` 가 Release 생성 단계에서 실패했을 때 이 단계만 재시도 |
-| `make release-backmerge` | [문제가 발생하지 않는 한 개발자가 직접 실행하지 않음] `release → develop` 머지만. `release-finish` 가 develop 머지에서 멈췄을 때 재시도 |
-| `make merge-release base=master\|develop` | [문제가 발생하지 않는 한 개발자가 직접 실행하지 않음] `release → base` PR 머지 한 방향. `release-finish`·`release-backmerge` 가 내부에서 쓴다 |
-| `make open-release-pr base=master\|develop [thread=…]` | [문제가 발생하지 않는 한 개발자가 직접 실행하지 않음] `release → base` PR 을 열고 URL 만 출력. `merge-release` 가 내부에서 쓴다 |
+| `make open-release-pr base=master\|develop [thread=…]` | [문제가 발생하지 않는 한 개발자가 직접 실행하지 않음] `release → base` PR 을 열고 URL 만 출력. `release-finish` 가 내부에서 쓴다 |
 | `make watch workflow=Deploy` | [문제가 발생하지 않는 한 개발자가 직접 실행하지 않음] 해당 워크플로의 최신 run 을 따라가며 출력. 배포 명령이 내부에서 쓴다. 터미널을 끊었다가 다시 보고 싶을 때 직접 실행 |
 
 ## 4. 릴리스 한 사이클
@@ -98,15 +98,16 @@ make qa-deploy branch=release-1.0.1
 
 ### 4.4 마감
 ```bash
-make release-finish branch=release-1.0.1 notes="- 항목 1\n- 항목 2"
+make release-finish thread=https://linkareer.slack.com/archives/…   # thread 는 선택
 ```
+1. `release → master`, `release → develop` PR 두 개가 열린다. 제목·본문은 자동(5절 "PR 제목·본문"). 여기까지가 로컬의 역할이다.
+2. 리뷰어가 두 PR 을 승인한다. PR 작성자는 자기 PR 을 승인할 수 없으므로 다른 계정이 필요하다.
+3. GitHub 에서 두 PR 을 **Merge commit** 으로 머지한다 (squash 금지).
+4. master 머지로 `Release Finish` 워크플로가 돌아 태그 `1.0.1` + GitHub Release 를 만들고 `release-1.0.1` 을 지운다. Release 본문은 `배포일` + PR 본문의 🔧 변경 사항. 손으로 다듬고 싶으면 머지 전에 PR 본문을 고친다.
+
 - 마지막 `qa-deploy` 빌드가 제출 빌드다. 마감 전에 별도 빌드를 만들지 않는다.
-- `release-finish` 는 `release → master`·`release → develop` PR 두 개를 먼저 연 뒤, master 머지 → 태그 `1.0.1` + GitHub Release 생성 → develop 머지 → `release-1.0.1` 삭제를 순서대로 한다.
-- master·develop 에 "리뷰 승인 1명" 규칙이 걸려 있으면 머지가 거부되고 PR URL 을 출력하며 멈춘다. 리뷰어가 두 PR 을 승인한 뒤 **같은 명령을 다시 실행**한다. PR 작성자는 자기 PR 을 승인할 수 없으므로 다른 계정이 필요하다.
-- Release 본문은 `배포일` + `반영사항` 형식이다. `notes` 의 `\n` 은 줄바꿈으로 바뀐다. `notes` 를 생략하면 머지된 PR 제목으로 자동 생성한다.
-- 버전은 머지 후 master 의 `Config/Version.xcconfig` 에서 읽는다. 태그는 master 의 머지 커밋을 가리킨다.
-- 두 머지 모두 merge commit 이다. squash 하지 않는다.
-- 중간에 멈추면 그대로 다시 실행한다. 이미 머지된 방향은 "머지할 커밋 없음" 으로 건너뛴다. develop 머지만 다시 하려면 `make release-backmerge`.
+- 머지 순서는 상관없다. develop 머지는 워크플로와 무관하다.
+- 워크플로가 실패하면 Actions 에서 Re-run. 같은 버전 Release 가 이미 있으면 생성은 건너뛰고 브랜치 삭제만 다시 시도한다.
 
 ### 4.5 hotfix (미구현)
 master(태그)에서 `release-x.y.z` 를 분기하는 것만 다르고 나머지 흐름은 같다. 현재 `release-start` 는 develop 에서만 분기하므로, 필요해지면 워크플로에 `base` 입력(기본 develop)을 추가한다.
@@ -134,8 +135,8 @@ master(태그)에서 `release-x.y.z` 를 분기하는 것만 다르고 나머지
 
 bump 커밋은 GITHUB_TOKEN 으로 push 되므로 Deploy 가 다시 돌지 않는다. `concurrency` 로 같은 브랜치의 이전 run 은 취소된다. bump job 은 10초대에 끝나므로 취소는 대개 build job 에서 일어나고, 그때 이미 push 된 빌드 번호는 비게 된다 (단조 증가만 유지되면 문제 없음).
 
-### 태그·GitHub Release (Makefile `github-release`)
-워크플로가 아니라 `release-finish` 가 로컬에서 `gh release create` 로 만든다. master 머지 직후 동기로 실행되므로 실패가 바로 보인다. 같은 버전의 Release 가 이미 있으면 건너뛴다.
+### Release Finish (`release-finish.yml`, ubuntu)
+master 에 push 되면 master 의 `Config/Version.xcconfig` 버전을 읽는다. 같은 이름의 태그·Release 가 이미 있으면 release 머지가 아닌 push 로 보고 아무것도 만들지 않는다. 없으면 `gh release create` 로 태그 + Release(배포일 + 머지 PR 본문의 🔧 변경 사항, 못 찾으면 자동 생성)를 만들고, `release-x.y.z` 브랜치가 있으면 지운다. 재실행해도 안전하다.
 
 ### PR 제목·본문 (`scripts/pr-body.sh`)
 Makefile 이 여는 PR 세 종류는 사람이 쓰지 않고 스크립트가 git/gh 에서 뽑아 채운다. 생성은 PR 을 **처음 열 때만** 하고, 고치고 싶으면 GitHub 에서 직접 수정한다 (재실행해도 덮어쓰지 않는다).
@@ -172,9 +173,9 @@ Makefile 이 여는 PR 세 종류는 사람이 쓰지 않고 스크립트가 git
    - 첫 run 의 `bump` 는 10초대에 끝나 `(3)` 을 이미 push 한 뒤라 취소되지 않는다. `(3)` 은 빌드되지 않은 채 건너뛴 번호로 남는다
 4. `make deploy-testflight` → `(5)`, `build test_flight · 1.0.1 (5)` 만 실행
    - `gh workflow run Deploy -R JunHyeok0206/iOS-release-pipeline-sandbox --ref develop -f lane=both` 는 `bump` 첫 step 에서 실패
-5. `make release-finish branch=release-1.0.1 notes="- QA 수정 1\n- QA 수정 2"` → master 머지, 태그 `1.0.1` + GitHub Release(배포일·반영사항), develop back-merge(`Version.xcconfig` 가 `1.0.1`/`5`), `release-1.0.1` 삭제
-   - 같은 명령을 다시 실행하면 네 단계 모두 "건너뜀" 으로 끝난다
-   - master/develop 에 승인 규칙이 있으면 "머지가 거부됨" + PR URL 로 멈춘다. 승인 후 재실행하면 이어서 진행
+5. `make release-finish thread=https://example.com/t` → `release → master`·`release → develop` PR 두 개가 열리고 종료. 제목 `release: 1.0.1 master에 반영`, 본문에 관련 스레드·변경 사항
+   - 다른 계정으로 승인 → GitHub 에서 두 PR 머지 → `Release Finish` run: 태그 `1.0.1` + GitHub Release(배포일·변경 사항), `release-1.0.1` 삭제. develop 의 `Version.xcconfig` 가 `1.0.1`/`5`
+   - `make release-finish` 를 다시 실행하면 "머지할 커밋 없음" 으로 끝난다
 6. `make release-start version=1.0.2` → 충돌 없이 `release` 에 머지되고 Deploy 가 `1.0.2 (1)`
 7. 충돌 내성 확인: `release-1.0.2` 에서 `TestApp/Resources/Info.plist` 의 아무 키나 수정해 push → `make qa-deploy` 가 충돌 없이 머지됨 (버전이 xcconfig 로 분리됐기 때문)
 8. 실패 재현: `release-1.0.2` 에서 로컬로 `bundle exec fastlane ios bump` 후 push → PR 에 `Config/Version.xcconfig` 충돌 표시 (규칙 위반 케이스)
@@ -212,10 +213,9 @@ Info.plist 안에 있으면 QA 수정이 바로 옆 줄을 고쳤을 때 충돌�
 | Actions 목록에서 run 을 구분하기 어려움 | run 이름에 입력값이 들어간다: `Release Start 1.0.3`, `Deploy both 1.0.3`(dispatch), `Deploy push: <커밋 제목>`(push). 빌드 번호는 run 생성 뒤 bump 가 정하므로 이름에 넣을 수 없다 |
 | 어떤 빌드 번호가 배포됐는지 보고 싶음 | run 상세의 job 이름(`build firebase · 1.0.3 (2)`)과 Summary(`Deploy iOS 1.0.3 (2)`)에 나온다. run 이름에는 넣을 수 없다 |
 | `make release-start` 가 `No rule to make target` | 다른 디렉터리다. 레포 루트에서 실행 |
-| `release-finish` 가 "머지가 거부됨" 으로 멈춤 | master/develop 룰셋의 리뷰 승인 요구. 출력된 PR 을 다른 계정이 승인한 뒤 같은 명령 재실행. |
-| `release-finish` 가 중간에 멈춤 | 그대로 다시 실행. 이미 머지된 방향은 "머지할 커밋 없음", 이미 만든 Release 는 "이미 존재" 로 건너뛴다. develop 머지만 다시 하려면 `make release-backmerge` |
-| `gh release create` 가 tag already exists | 같은 버전 태그가 있다. 버전이 맞는지 확인하고, 재배포면 태그를 지우거나 버전을 올린다 |
-| `gh pr merge` 가 "no pull requests found" | 같은 head 로 열린 PR 이 없다. `make merge-release base=…` 가 PR 생성부터 다시 한다 |
+| `Release Finish` 가 실패 | Actions 에서 Re-run. Release 가 이미 있으면 생성은 건너뛰고 브랜치 삭제만 다시 한다 |
+| `Release Finish` 가 돌았는데 Release 가 없음 | master 의 `Version.xcconfig` 버전과 같은 태그가 이미 있었다. 버전이 올라가지 않은 채 머지된 경우다 |
+| `gh pr merge` 가 "no pull requests found" (`qa-deploy`) | 같은 head 로 열린 PR 이 없다. `make qa-deploy` 를 다시 실행하면 PR 생성부터 한다 |
 
 ## 10. 로컬
 

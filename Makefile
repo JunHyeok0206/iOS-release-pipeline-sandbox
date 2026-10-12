@@ -1,4 +1,5 @@
 REPO := JunHyeok0206/iOS-release-pipeline-sandbox
+VERSION_XCCONFIG := Config/Version.xcconfig   # scripts/pr-body.sh 가 버전을 읽는 파일
 
 generate:
 	mise install
@@ -16,9 +17,9 @@ qa-deploy:
 	@case "$(branch)" in release-*) ;; *) echo "release-x.y.z 브랜치여야 합니다 (현재: $(branch))"; exit 1;; esac
 	@URL=$$(gh pr list -R $(REPO) --base release --head $(branch) --state open --json url -q '.[0].url'); \
 	if [ -z "$$URL" ]; then \
-		URL=$$(REPO=$(REPO) gh pr create -R $(REPO) --base release --head $(branch) \
-			--title "$$(REPO=$(REPO) scripts/pr-body.sh title qa $(branch))" \
-			--body "$$(REPO=$(REPO) scripts/pr-body.sh body qa $(branch))"); \
+		URL=$$(gh pr create -R $(REPO) --base release --head $(branch) \
+			--title "$$(REPO=$(REPO) VERSION_XCCONFIG=$(VERSION_XCCONFIG) scripts/pr-body.sh title qa $(branch))" \
+			--body "$$(REPO=$(REPO) VERSION_XCCONFIG=$(VERSION_XCCONFIG) scripts/pr-body.sh body qa $(branch))"); \
 	fi; \
 	echo "$$URL"; gh pr merge -R $(REPO) "$$URL" --merge
 	$(MAKE) watch workflow=Deploy
@@ -61,8 +62,8 @@ open-release-pr:
 	@URL=$$(gh pr list -R $(REPO) --base $(base) --head release --state open --json url -q '.[0].url'); \
 	if [ -z "$$URL" ]; then \
 		URL=$$(gh pr create -R $(REPO) --base $(base) --head release \
-			--title "$$(REPO=$(REPO) scripts/pr-body.sh title release $(base))" \
-			--body "$$(REPO=$(REPO) scripts/pr-body.sh body release $(base) '$(thread)')" 2>/dev/null); \
+			--title "$$(REPO=$(REPO) VERSION_XCCONFIG=$(VERSION_XCCONFIG) scripts/pr-body.sh title release $(base))" \
+			--body "$$(REPO=$(REPO) VERSION_XCCONFIG=$(VERSION_XCCONFIG) scripts/pr-body.sh body release $(base) '$(thread)')" 2>/dev/null); \
 	fi; \
 	echo "$$URL"
 

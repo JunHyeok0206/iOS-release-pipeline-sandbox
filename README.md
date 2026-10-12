@@ -169,6 +169,7 @@ Makefile 이 여는 PR 세 종류는 사람이 쓰지 않고 스크립트가 git
 6. `make release-start version=1.0.2` → 충돌 없이 `release` 에 머지되고 Deploy 가 `1.0.2 (1)`
 7. 충돌 내성 확인: `release-1.0.2` 에서 `TestApp/Resources/Info.plist` 의 아무 키나 수정해 push → `make qa-deploy` 가 충돌 없이 머지됨 (버전이 xcconfig 로 분리됐기 때문)
 8. 실패 재현: `release-1.0.2` 에서 로컬로 `bundle exec fastlane ios bump` 후 push → PR 에 `Config/Version.xcconfig` 충돌 표시 (규칙 위반 케이스)
+9. PR 본문 확인: 6~8 과정에서 열린 `deploy: release-1.0.2 (n건)` PR 과 `release: 1.0.2 master에 반영` / `develop에 반영` PR 의 본문이 5절 "PR 제목·본문" 대로 채워졌는지. `make release-finish … thread=<url>` 을 주면 요약에 관련 스레드가 들어간다
 
 ## 8. 자주 묻는 것
 

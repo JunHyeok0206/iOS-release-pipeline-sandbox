@@ -61,15 +61,15 @@
 <!-- cmd_finish -->
 <g id="node8" class="node">
 <title>cmd_finish</title>
-<path fill="#fff4ce" stroke="#b58900" d="M950.38,-201.5C950.38,-201.5 869.88,-201.5 869.88,-201.5 863.88,-201.5 857.88,-195.5 857.88,-189.5 857.88,-189.5 857.88,-177 857.88,-177 857.88,-171 863.88,-165 869.88,-165 869.88,-165 950.38,-165 950.38,-165 956.38,-165 962.38,-171 962.38,-177 962.38,-177 962.38,-189.5 962.38,-189.5 962.38,-195.5 956.38,-201.5 950.38,-201.5"/>
+<path fill="#fff4ce" stroke="#b58900" d="M958.62,-201.5C958.62,-201.5 861.62,-201.5 861.62,-201.5 855.62,-201.5 849.62,-195.5 849.62,-189.5 849.62,-189.5 849.62,-177 849.62,-177 849.62,-171 855.62,-165 861.62,-165 861.62,-165 958.62,-165 958.62,-165 964.62,-165 970.62,-171 970.62,-177 970.62,-177 970.62,-189.5 970.62,-189.5 970.62,-195.5 964.62,-201.5 958.62,-201.5"/>
 <text text-anchor="middle" x="910.12" y="-187.05" font-family="Apple SD Gothic Neo" font-size="11.00">make release&#45;finish</text>
-<text text-anchor="middle" x="910.12" y="-172.8" font-family="Apple SD Gothic Neo" font-size="11.00">[notes=…]</text>
+<text text-anchor="middle" x="910.12" y="-172.8" font-family="Apple SD Gothic Neo" font-size="11.00">[notes=…] [thread=…]</text>
 </g>
 <!-- release&#45;&gt;cmd_finish -->
 <g id="edge10" class="edge">
 <title>release&#45;&gt;cmd_finish</title>
-<path fill="none" stroke="#555555" d="M722.13,-145.52C752.88,-151.73 804.99,-162.24 846.4,-170.6"/>
-<polygon fill="#555555" stroke="#555555" points="845.52,-173.99 856.02,-172.53 846.91,-167.13 845.52,-173.99"/>
+<path fill="none" stroke="#555555" d="M722.13,-145.52C750.89,-151.32 798.32,-160.89 838.21,-168.94"/>
+<polygon fill="#555555" stroke="#555555" points="837.27,-172.32 847.76,-170.87 838.65,-165.46 837.27,-172.32"/>
 </g>
 <!-- wf_deploy -->
 <g id="node10" class="node">
@@ -130,7 +130,7 @@
 <!-- cmd_finish&#45;&gt;develop -->
 <g id="edge13" class="edge">
 <title>cmd_finish&#45;&gt;develop</title>
-<path fill="none" stroke="#555555" stroke-dasharray="5,2" d="M857.66,-193.08C814.63,-200.44 751.54,-209.25 696,-209.25 190.5,-209.25 190.5,-209.25 190.5,-209.25 155.98,-209.25 116.89,-204.93 88.95,-201.09"/>
+<path fill="none" stroke="#555555" stroke-dasharray="5,2" d="M849.19,-194.5C806.61,-201.53 748,-209.25 696,-209.25 190.5,-209.25 190.5,-209.25 190.5,-209.25 155.98,-209.25 116.89,-204.93 88.95,-201.09"/>
 <polygon fill="#555555" stroke="#555555" points="89.6,-197.65 79.21,-199.7 88.61,-204.58 89.6,-197.65"/>
 <text text-anchor="middle" x="453.12" y="-223.2" font-family="Apple SD Gothic Neo" font-size="9.00">back&#45;merge</text>
 <text text-anchor="middle" x="453.12" y="-211.95" font-family="Apple SD Gothic Neo" font-size="9.00">release&#45;x.y.z 삭제</text>
@@ -138,8 +138,8 @@
 <!-- cmd_finish&#45;&gt;master -->
 <g id="edge11" class="edge">
 <title>cmd_finish&#45;&gt;master</title>
-<path fill="none" stroke="#555555" stroke-dasharray="5,2" d="M962.62,-188.27C1017.16,-193.58 1101.96,-201.83 1150.62,-206.57"/>
-<polygon fill="#555555" stroke="#555555" points="1150.08,-210.04 1160.37,-207.52 1150.76,-203.07 1150.08,-210.04"/>
+<path fill="none" stroke="#555555" stroke-dasharray="5,2" d="M970.94,-189.08C1025.56,-194.39 1104.63,-202.09 1150.84,-206.6"/>
+<polygon fill="#555555" stroke="#555555" points="1150.33,-210.06 1160.62,-207.55 1151.01,-203.09 1150.33,-210.06"/>
 <text text-anchor="middle" x="1064.38" y="-204.22" font-family="Apple SD Gothic Neo" font-size="9.00">PR 머지</text>
 </g>
 <!-- gh_rel -->
@@ -152,8 +152,8 @@
 <!-- cmd_finish&#45;&gt;gh_rel -->
 <g id="edge12" class="edge">
 <title>cmd_finish&#45;&gt;gh_rel</title>
-<path fill="none" stroke="#555555" d="M962.62,-178.23C1003.35,-174.27 1060.94,-168.66 1107.77,-164.1"/>
-<polygon fill="#555555" stroke="#555555" points="1107.99,-167.59 1117.61,-163.14 1107.31,-160.63 1107.99,-167.59"/>
+<path fill="none" stroke="#555555" d="M970.94,-177.42C1011.07,-173.52 1064.38,-168.33 1108.18,-164.06"/>
+<polygon fill="#555555" stroke="#555555" points="1108.26,-167.57 1117.87,-163.12 1107.58,-160.6 1108.26,-167.57"/>
 <text text-anchor="middle" x="1064.38" y="-174.07" font-family="Apple SD Gothic Neo" font-size="9.00">머지 후 로컬에서 실행</text>
 </g>
 <!-- wf_start&#45;&gt;relx -->

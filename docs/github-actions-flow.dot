@@ -16,7 +16,7 @@ digraph GitHubActionsFlow {
     cmd_start  [label="make release-start\nversion=x.y.z"]
     cmd_qa     [label="make qa-deploy"]
     cmd_deploy [label="make deploy\n[lane=…]"]
-    cmd_finish [label="make release-finish\n[notes=…]"]
+    cmd_finish [label="make release-finish\n[notes=…] [thread=…]"]
 
     // 워크플로 (gh_rel 은 Makefile 이 로컬에서 실행)
     node [shape=box, style="rounded,filled", fillcolor="#F3F3F3", color="#888888"]

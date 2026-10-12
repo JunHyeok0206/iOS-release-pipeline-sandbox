@@ -50,7 +50,10 @@ release-finish:
 	$(MAKE) merge-release base=master
 	$(MAKE) github-release notes='$(notes)'
 	$(MAKE) merge-release base=develop
-	@case "$(branch)" in release-*) git push origin --delete "$(branch)";; *) echo "release-x.y.z 삭제 건너뜀 (branch=$(branch))";; esac
+	@case "$(branch)" in \
+		release-*) if git ls-remote --exit-code --heads origin "$(branch)" >/dev/null; then git push origin --delete "$(branch)"; else echo "$(branch) 이미 삭제됨, 건너뜀"; fi;; \
+		*) echo "release-x.y.z 삭제 건너뜀 (branch=$(branch))";; \
+	esac
 
 # master 의 Version.xcconfig 버전으로 태그 + GitHub Release 생성. 이미 있으면 건너뛰어 재실행해도 안전
 github-release: notes ?=

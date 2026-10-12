@@ -16,17 +16,17 @@ digraph GitHubActionsFlow {
     cmd_start  [label="make release-start\nversion=x.y.z"]
     cmd_qa     [label="make qa-deploy"]
     cmd_deploy [label="make deploy\n[lane=…]"]
-    cmd_finish [label="make release-finish\n[notes=…] [thread=…]"]
+    cmd_finish [label="make release-finish\n[thread=…]"]
 
     // 워크플로 (gh_rel 은 Makefile 이 로컬에서 실행)
     node [shape=box, style="rounded,filled", fillcolor="#F3F3F3", color="#888888"]
     wf_start  [label="Release Start\n① release-x.y.z 생성\n② release 에 머지\n③ Deploy 호출"]
     wf_deploy [label="Deploy\n① bump (버전·빌드 번호 → release 커밋)\n② build: firebase ∥ test_flight"]
-    gh_rel    [label="gh release create\n태그 x.y.z + GitHub Release"]
+    wf_finish [label="Release Finish\n① 태그 x.y.z + GitHub Release\n② release-x.y.z 삭제"]
 
     // PR (제목·본문은 scripts/pr-body.sh 가 생성)
     node [shape=note, style="filled", fillcolor="#FFFFFF", color="#888888"]
-    pr_finish [label="PR: release → master\nPR: release → develop\n리뷰 승인 1명 필요\n→ 승인 후 같은 명령 재실행"]
+    pr_finish [label="PR: release → master\nPR: release → develop\n리뷰 승인 1명 → GitHub 에서 머지"]
 
     // 흐름
     cmd_start -> wf_start
@@ -43,7 +43,7 @@ digraph GitHubActionsFlow {
     release    -> cmd_finish
     cmd_finish -> pr_finish [label="PR 열기"]
     pr_finish  -> master  [label="승인 후 머지", style=dashed]
-    cmd_finish -> gh_rel  [label="master 머지 후"]
-    pr_finish  -> develop [label="승인 후 back-merge\nrelease-x.y.z 삭제", style=dashed]
+    master     -> wf_finish [label="push 트리거"]
+    pr_finish  -> develop [label="승인 후 back-merge", style=dashed]
 
 }

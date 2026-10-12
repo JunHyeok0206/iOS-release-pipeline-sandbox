@@ -36,25 +36,7 @@ deploy-firebase:
 deploy-testflight:
 	$(MAKE) deploy lane=test_flight
 
-# release → $(base) PR 머지. 머지할 커밋이 없으면 건너뛰어 재실행해도 안전.
-# base 에 리뷰 승인 규칙이 있으면 머지가 거부된다 → PR URL 을 안내하고 멈춘다. 승인 후 같은 명령을 다시 실행
-merge-release: base ?=
-merge-release: thread ?=
-merge-release:
-	@test -n "$(base)" || { echo "usage: make merge-release base=master|develop"; exit 1; }
-	@git fetch -q origin release $(base); \
-	if [ "$$(git rev-list --count origin/$(base)..origin/release)" = "0" ]; then \
-		echo "release → $(base): 머지할 커밋 없음, 건너뜀"; \
-	else \
-		URL=$$($(MAKE) -s open-release-pr base=$(base) thread='$(thread)'); \
-		if gh pr merge -R $(REPO) "$$URL" --merge; then \
-			echo "release → $(base): 머지 완료 $$URL"; \
-		else \
-			echo ""; echo "release → $(base) 머지가 거부됨. 리뷰 승인이 필요하면 승인 후 같은 명령을 다시 실행: $$URL"; exit 1; \
-		fi; \
-	fi
-
-# release → $(base) PR 을 열고 URL 만 출력 (이미 열려 있으면 그 URL). 내부용
+# release → $(base) PR 을 열고 URL 만 출력 (이미 열려 있으면 그 URL). 제목·본문은 scripts/pr-body.sh. 내부용
 open-release-pr: base ?=
 open-release-pr: thread ?=
 open-release-pr:
@@ -66,46 +48,20 @@ open-release-pr:
 	fi; \
 	echo "$$URL"
 
-# 릴리스 마감: release → master 머지 → 태그·GitHub Release → release → develop 머지 → release-x.y.z 삭제
-# master/develop 에 리뷰 승인 규칙이 있으면 두 PR 을 먼저 열고 멈춘다. 승인 후 같은 명령을 다시 실행하면 이어서 진행
-# notes="- 항목1\n- 항목2" 를 주면 그 내용이 Release 본문, 생략하면 PR 제목으로 자동 생성
-# thread=<slack url> 을 주면 PR 본문 요약에 관련 스레드 링크를 넣는다 (scripts/pr-body.sh)
-release-finish: branch ?= $(shell git branch --show-current)
-release-finish: notes ?=
+# 릴리스 마감: release → master, release → develop PR 을 연다. 여기까지가 로컬의 역할.
+# 리뷰 승인 후 GitHub 에서 두 PR 을 머지하면, master push 로 Release Finish 워크플로가 태그·GitHub Release 생성과 release-x.y.z 삭제를 한다.
+# thread=<slack url> 을 주면 PR 본문 요약에 관련 스레드 링크를 넣는다
 release-finish: thread ?=
 release-finish:
 	@git fetch -q origin release master develop; \
 	for b in master develop; do \
-		if [ "$$(git rev-list --count origin/$$b..origin/release)" != "0" ]; then echo "release → $$b PR: $$($(MAKE) -s open-release-pr base=$$b thread='$(thread)')"; fi; \
-	done
-	$(MAKE) merge-release base=master thread='$(thread)'
-	$(MAKE) github-release notes='$(notes)'
-	$(MAKE) merge-release base=develop thread='$(thread)'
-	@case "$(branch)" in \
-		release-*) if git ls-remote --exit-code --heads origin "$(branch)" >/dev/null; then git push origin --delete "$(branch)"; else echo "$(branch) 이미 삭제됨, 건너뜀"; fi;; \
-		*) echo "release-x.y.z 삭제 건너뜀 (branch=$(branch))";; \
-	esac
-
-# master 의 Version.xcconfig 버전으로 태그 + GitHub Release 생성. 이미 있으면 건너뛰어 재실행해도 안전
-github-release: notes ?=
-github-release:
-	@git fetch -q origin master; \
-	VERSION=$$(git show origin/master:Config/Version.xcconfig | sed -n 's/^MARKETING_VERSION *= *//p'); \
-	test -n "$$VERSION" || { echo "origin/master 의 Config/Version.xcconfig 에서 버전을 읽지 못했습니다"; exit 1; }; \
-	if gh release view -R $(REPO) "$$VERSION" >/dev/null 2>&1; then \
-		echo "Release $$VERSION 이미 존재, 건너뜀"; \
-	else \
-		BODY="배포일\n* $$(TZ=Asia/Seoul date '+%Y/%m/%d')\n\n반영사항\n"; \
-		if [ -n '$(notes)' ]; then \
-			printf '%b' "$$BODY"'$(notes)' | gh release create -R $(REPO) "$$VERSION" --target master --title "$$VERSION" --notes-file -; \
+		if [ "$$(git rev-list --count origin/$$b..origin/release)" = "0" ]; then \
+			echo "release → $$b: 머지할 커밋 없음, 건너뜀"; \
 		else \
-			gh release create -R $(REPO) "$$VERSION" --target master --title "$$VERSION" --notes "$$(printf '%b' "$$BODY")" --generate-notes; \
+			echo "release → $$b PR: $$($(MAKE) -s open-release-pr base=$$b thread='$(thread)')"; \
 		fi; \
-	fi
-
-# 재시도용: release-finish 가 develop 머지에서 멈췄을 때
-release-backmerge:
-	$(MAKE) merge-release base=develop
+	done; \
+	echo ""; echo "리뷰 승인 후 GitHub 에서 두 PR 을 머지하세요. master 머지 시 Release Finish 워크플로가 태그·GitHub Release 생성과 release-x.y.z 삭제를 합니다."
 
 runs:
 	gh run list -R $(REPO) --limit 10

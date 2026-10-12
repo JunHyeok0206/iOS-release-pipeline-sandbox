@@ -1,0 +1,100 @@
+digraph GitHubActionsFlow {
+    rankdir=TB
+    newrank=true
+    fontname="Apple SD Gothic Neo"
+    node  [fontname="Apple SD Gothic Neo", shape=box, style="rounded,filled", fillcolor="#FFFFFF", color="#555555", fontsize=11]
+    edge  [fontname="Apple SD Gothic Neo", fontsize=9, color="#555555"]
+    graph [fontsize=12, labeljust=l]
+
+    // 브랜치
+    node [shape=cylinder, style=filled, fillcolor="#E8F0FE", color="#3367D6"]
+    develop   [label="develop"]
+    relx      [label="release-x.y.z"]
+    release   [label="release"]
+    master    [label="master"]
+
+    // 개발자 명령
+    node [shape=box, style="rounded,filled", fillcolor="#FFF4CE", color="#B58900"]
+    cmd_start  [label="make release-start version=x.y.z"]
+    cmd_qa     [label="make qa-deploy\n(release-x.y.z → release PR 머지)"]
+    cmd_deploy [label="make deploy [lane=…]\n(workflow_dispatch)"]
+    cmd_finish [label="make release-finish\n(release → master PR 머지)"]
+    fixpr      [label="QA 수정 PR\n(base = release-x.y.z)"]
+
+    subgraph cluster_start {
+        label="Release Start (ubuntu)"
+        style="rounded,dashed"; color="#888888"
+        node [fillcolor="#FFFFFF", color="#555555"]
+        s1 [label="x.y.z 형식 검사\n브랜치 중복 검사"]
+        s2 [label="develop 에서\nrelease-x.y.z 생성 (커밋 없음)"]
+        s3 [label="release 에 --no-ff 머지 후 push"]
+        s4 [label="Deploy dispatch\nlane=both version=x.y.z"]
+        s1 -> s2 -> s3 -> s4
+    }
+
+    subgraph cluster_deploy {
+        label="Deploy"
+        style="rounded,dashed"; color="#888888"
+        node [fillcolor="#FFFFFF", color="#555555"]
+
+        subgraph cluster_bump {
+            label="bump job (ubuntu)"
+            style="rounded"; color="#AAAAAA"
+            b0 [label="ref == release ?", shape=diamond, fillcolor="#F3F3F3"]
+            b1 [label="버전 결정\n① dispatch 입력 version\n② HEAD 메시지의 release-x.y.z\n③ 없으면 현재 값"]
+            b2 [label="현재 MARKETING_VERSION\n과 다른가?", shape=diamond, fillcolor="#F3F3F3"]
+            b3 [label="bump version:x.y.z build:1"]
+            b4 [label="bump (build +1)"]
+            b5 [label="Config/Version.xcconfig 커밋\nGITHUB_TOKEN 으로 release 에 push\n(재트리거 없음)"]
+            bfail [label="실패 (중단)", fillcolor="#FDE2E2", color="#C0392B"]
+            b0 -> b1 [label="yes"]
+            b0 -> bfail [label="no"]
+            b1 -> b2
+            b2 -> b3 [label="다름"]
+            b2 -> b4 [label="같음"]
+            b3 -> b5
+            b4 -> b5
+        }
+
+        subgraph cluster_build {
+            label="build job × lane (macos-26, 병렬)"
+            style="rounded"; color="#AAAAAA"
+            f1 [label="build (firebase)\nbump 커밋 체크아웃 → Xcode 26.6\n→ Tuist generate → fastlane ios firebase"]
+            t1 [label="build (test_flight)\nbump 커밋 체크아웃 → Xcode 26.6\n→ Tuist generate → fastlane ios test_flight"]
+        }
+        b5 -> f1
+        b5 -> t1
+        { rank=same; f1; t1 }
+    }
+
+    subgraph cluster_note {
+        label="Release Note (ubuntu)"
+        style="rounded,dashed"; color="#888888"
+        node [fillcolor="#FFFFFF", color="#555555"]
+        n1 [label="최근 20개 커밋에\nrelease: x.y.z 커밋이 있는가?", shape=diamond, fillcolor="#F3F3F3"]
+        n2 [label="태그 x.y.z + GitHub Release 생성"]
+        n3 [label="아무것도 안 함"]
+        n1 -> n2 [label="yes"]
+        n1 -> n3 [label="no"]
+    }
+
+    // 흐름
+    cmd_start -> s1
+    develop -> s2 [style=dashed]
+    s2 -> relx [style=dashed]
+    s3 -> release [style=dashed]
+    s4 -> b0
+
+    relx -> fixpr
+    fixpr -> relx [label="머지 (반복)"]
+    relx -> cmd_qa
+    cmd_qa -> release [label="push (merge commit)", style=dashed]
+    release -> b0 [label="push 트리거"]
+    cmd_deploy -> b0 [label="dispatch (release 에서만)"]
+    b5 -> release [style=dashed, label="bump 커밋"]
+
+    release -> cmd_finish
+    cmd_finish -> master [label="push (merge commit)", style=dashed]
+    master -> n1 [label="push 트리거"]
+    cmd_finish -> develop [label="back-merge 후\nrelease-x.y.z 삭제", style=dashed]
+}

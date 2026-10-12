@@ -1,0 +1,108 @@
+name: Deploy
+
+on:
+  push:
+    branches: [release]
+    paths-ignore: ['**.md', 'docs/**']
+  workflow_dispatch:
+    inputs:
+      lane:
+        description: '배포 대상'
+        type: choice
+        options: [both, firebase, test_flight]
+        default: both
+      version:
+        description: '마케팅 버전 x.y.z (비우면 release 의 현재 값 유지, 빌드 번호만 +1)'
+        type: string
+        required: false
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      sha: ${{ steps.push.outputs.sha }}
+      lanes: ${{ steps.lanes.outputs.lanes }}
+    steps:
+      - if: ${{ github.ref != 'refs/heads/release' }}
+        run: |
+          echo "::error::release 브랜치에서만 실행할 수 있습니다 (현재: ${{ github.ref }})"
+          exit 1
+
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.4'
+          bundler-cache: true
+
+      # 버전 결정 순서: dispatch 입력 → HEAD 커밋 메시지의 release-x.y.z → 없으면 현재 값 유지
+      # 현재 값과 다르면 x.y.z (1) 로 시작, 같으면 빌드 번호 +1
+      - name: Bump version and push
+        id: push
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+          if [ -z "$VERSION" ]; then
+            VERSION=$(git log -1 --format=%s | grep -oE 'release-[0-9]+\.[0-9]+\.[0-9]+' | head -1 | sed 's/^release-//' || true)
+          fi
+          CURRENT=$(sed -n 's/^MARKETING_VERSION *= *//p' Config/Version.xcconfig)
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if [ -n "$VERSION" ] && [ "$VERSION" != "$CURRENT" ]; then
+            bundle exec fastlane ios bump version:"$VERSION" build:1
+          else
+            bundle exec fastlane ios bump
+          fi
+          git push "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" \
+            "HEAD:refs/heads/${{ github.ref_name }}"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Select lanes
+        id: lanes
+        run: |
+          case "${{ github.event.inputs.lane }}" in
+            firebase)    echo 'lanes=["firebase"]' ;;
+            test_flight) echo 'lanes=["test_flight"]' ;;
+            *)           echo 'lanes=["firebase","test_flight"]' ;;
+          esac >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: bump
+    runs-on: macos-26
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        lane: ${{ fromJSON(needs.bump.outputs.lanes) }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.bump.outputs.sha }}
+          persist-credentials: false
+
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '26.6'
+      - run: xcodebuild -version
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.4'
+          bundler-cache: true
+
+      - uses: jdx/mise-action@v5
+
+      - name: Tuist generate
+        run: mise x -- tuist generate --no-open
+
+      - name: fastlane ios ${{ matrix.lane }}
+        run: bundle exec fastlane ios "${{ matrix.lane }}"

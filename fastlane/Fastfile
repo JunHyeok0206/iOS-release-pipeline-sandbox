@@ -1,0 +1,89 @@
+default_platform :ios
+
+$version_xcconfig_path = "./Config/Version.xcconfig"
+
+platform :ios do
+
+  desc "버전·빌드 번호 변경 (version:x.y.z build:n / 옵션 없으면 build +1)"
+  lane :bump do |options|
+    new_short_version = options[:version]
+    new_build_number = options[:build]
+
+    if new_build_number && new_build_number.to_i < 0
+      UI.user_error!("빌드 넘버는 0 이상이어야 합니다. (입력값: #{new_build_number})")
+    end
+
+    version = new_short_version || read_xcconfig("MARKETING_VERSION")
+    build = if new_build_number
+              new_build_number.to_i
+            elsif new_short_version.nil?
+              read_xcconfig("CURRENT_PROJECT_VERSION").to_i + 1
+            else
+              read_xcconfig("CURRENT_PROJECT_VERSION").to_i
+            end
+
+    write_xcconfig("MARKETING_VERSION", version)
+    write_xcconfig("CURRENT_PROJECT_VERSION", build.to_s)
+
+    new_version_number = version_string(version, build)
+    UI.message("New version in #{$version_xcconfig_path} -> #{new_version_number}")
+    git_commit(path: [$version_xcconfig_path], message: "Bump version to #{new_version_number}")
+  end
+
+  desc "Firebase 배포 (테스트: 시뮬레이터 빌드까지만, 업로드는 stub)"
+  lane :firebase do
+    prepare_build
+    build_for_simulator
+    UI.success("[stub] firebase_app_distribution → #{current_version_string}")
+    UI.message(release_notes("테스트서버"))
+  end
+
+  desc "TestFlight 배포 (테스트: 시뮬레이터 빌드까지만, 업로드는 stub)"
+  lane :test_flight do
+    prepare_build
+    build_for_simulator
+    UI.success("[stub] pilot → #{current_version_string}")
+  end
+end
+
+def prepare_build
+  setup_ci if is_ci
+  ensure_xcode_major("26")
+end
+
+def ensure_xcode_major(major)
+  current = sh("xcodebuild -version", log: false)[/Xcode (\d+)/, 1]
+  UI.user_error!("Xcode #{major}.x 가 필요합니다 (현재 #{current})") unless current == major
+end
+
+def build_for_simulator
+  sh("cd .. && xcodebuild -workspace TestApp.xcworkspace -scheme TestApp " \
+     "-destination 'generic/platform=iOS Simulator' -configuration Debug " \
+     "CODE_SIGNING_ALLOWED=NO build | tail -20; exit ${PIPESTATUS[0]}")
+end
+
+def xcconfig_file
+  File.expand_path(File.join("..", $version_xcconfig_path), __dir__)
+end
+
+def read_xcconfig(key)
+  File.read(xcconfig_file)[/^#{key}\s*=\s*(.+)$/, 1].to_s.strip
+end
+
+def write_xcconfig(key, value)
+  content = File.read(xcconfig_file)
+  UI.user_error!("#{key} 가 #{$version_xcconfig_path} 에 없습니다") unless content.match?(/^#{key}\s*=/)
+  File.write(xcconfig_file, content.sub(/^#{key}\s*=.*$/, "#{key} = #{value}"))
+end
+
+def current_version_string
+  version_string(read_xcconfig("MARKETING_VERSION"), read_xcconfig("CURRENT_PROJECT_VERSION"))
+end
+
+def release_notes(server_type)
+  "서버: #{server_type}\n버전: #{current_version_string}"
+end
+
+def version_string(version_number, build_number)
+  "iOS #{version_number} (#{build_number})"
+end

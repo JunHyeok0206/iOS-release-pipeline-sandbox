@@ -1,0 +1,50 @@
+name: Release Start
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '시작할 버전 (x.y.z)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  start:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VERSION: ${{ inputs.version }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Validate version
+        run: |
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::x.y.z 형식이어야 합니다 ($VERSION)"; exit 1; }
+
+      - uses: actions/checkout@v5
+        with:
+          ref: develop
+          fetch-depth: 0
+
+      - name: Ensure branch does not exist
+        run: |
+          if git ls-remote --exit-code --heads origin "release-$VERSION" >/dev/null; then
+            echo "::error::release-$VERSION 브랜치가 이미 있습니다"; exit 1
+          fi
+
+      - name: Create release-x.y.z from develop
+        run: git push origin "HEAD:refs/heads/release-$VERSION"
+
+      - name: Merge into release
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B release origin/release
+          git merge --no-ff -m "Merge release-$VERSION into release" "origin/develop"
+          git push origin release
+
+      - name: Trigger Deploy
+        run: gh workflow run deploy.yml --ref release -f lane=both -f version="$VERSION"

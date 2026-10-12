@@ -44,6 +44,8 @@ develop ─┬─ make release-start version=1.0.1
 
 레포 루트에서 실행한다. `gh auth login` 이 되어 있어야 한다. GitHub 웹의 Actions → Run workflow 로도 같은 일을 할 수 있다.
 
+### 개발자가 쓰는 명령
+
 | 명령 | 하는 일 |
 |---|---|
 | `make release-start version=x.y.z` | 릴리스 시작. 브랜치 생성 + `release` 머지 + 첫 배포 `(1)` |
@@ -51,12 +53,20 @@ develop ─┬─ make release-start version=1.0.1
 | `make deploy [lane=both\|firebase\|test_flight]` | 코드 변경 없이 재배포. 빌드 번호만 +1 |
 | `make deploy-firebase` / `make deploy-testflight` | 위의 단축 |
 | `make release-finish [branch=release-x.y.z] [notes="…"] [thread=<slack url>]` | 마감. `release → master`·`release → develop` PR 을 열고 → master 머지 → 태그·GitHub Release 생성 → develop 머지 → `release-x.y.z` 삭제. master/develop 에 리뷰 승인 규칙이 있으면 PR URL 을 안내하고 멈춘다. **승인 후 같은 명령을 다시 실행**하면 이어서 진행. 재실행해도 안전(이미 머지된 방향·이미 있는 Release·이미 삭제된 브랜치는 건너뜀) |
-| `make github-release [notes="…"]` | master 의 `Version.xcconfig` 버전으로 태그 + GitHub Release 만 생성. `release-finish` 가 내부에서 쓴다 |
-| `make release-backmerge` | 재시도용. `release → develop` 머지만 |
-| `make merge-release base=master\|develop` | `release → base` PR 머지 한 방향. 위 두 타깃이 내부에서 쓴다 |
 | `make runs` | 최근 실행 10개 |
-| `make watch workflow=Deploy` | 해당 워크플로의 최신 run 을 따라가며 출력 |
 | `make generate` | 로컬 Tuist 프로젝트 생성 |
+
+### 내부·재시도용 명령
+
+정상 흐름에서는 위 명령이 내부에서 호출한다. **문제가 발생하지 않는 한 개발자가 직접 실행하지 않는다.**
+
+| 명령 | 하는 일 |
+|---|---|
+| `make github-release [notes="…"]` | [문제가 발생하지 않는 한 개발자가 직접 실행하지 않음] master 의 `Version.xcconfig` 버전으로 태그 + GitHub Release 만 생성. `release-finish` 가 Release 생성 단계에서 실패했을 때 이 단계만 재시도 |
+| `make release-backmerge` | [문제가 발생하지 않는 한 개발자가 직접 실행하지 않음] `release → develop` 머지만. `release-finish` 가 develop 머지에서 멈췄을 때 재시도 |
+| `make merge-release base=master\|develop` | [문제가 발생하지 않는 한 개발자가 직접 실행하지 않음] `release → base` PR 머지 한 방향. `release-finish`·`release-backmerge` 가 내부에서 쓴다 |
+| `make open-release-pr base=master\|develop [thread=…]` | [문제가 발생하지 않는 한 개발자가 직접 실행하지 않음] `release → base` PR 을 열고 URL 만 출력. `merge-release` 가 내부에서 쓴다 |
+| `make watch workflow=Deploy` | [문제가 발생하지 않는 한 개발자가 직접 실행하지 않음] 해당 워크플로의 최신 run 을 따라가며 출력. 배포 명령이 내부에서 쓴다. 터미널을 끊었다가 다시 보고 싶을 때 직접 실행 |
 
 ## 4. 릴리스 한 사이클
 

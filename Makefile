@@ -50,7 +50,27 @@ release-finish:
 	$(MAKE) merge-release base=master
 	$(MAKE) github-release notes='$(notes)'
 	$(MAKE) merge-release base=develop
-	@case "$(branch)" in release-*) git push origin --delete "$(branch)";; *) echo "release-x.y.z 삭제 건너뜀 (branch=$(branch))";; esac
+	@case "$(branch)" in \
+		release-*) if git ls-remote --exit-code --heads origin "$(branch)" >/dev/null; then git push origin --delete "$(branch)"; else echo "$(branch) 이미 삭제됨, 건너뜀"; fi;; \
+		*) echo "release-x.y.z 삭제 건너뜀 (branch=$(branch))";; \
+	esac
+
+# master 의 Version.xcconfig 버전으로 태그 + GitHub Release 생성. 이미 있으면 건너뛰어 재실행해도 안전
+github-release: notes ?=
+github-release:
+	@git fetch -q origin master; \
+	VERSION=$$(git show origin/master:Config/Version.xcconfig | sed -n 's/^MARKETING_VERSION *= *//p'); \
+	test -n "$$VERSION" || { echo "origin/master 의 Config/Version.xcconfig 에서 버전을 읽지 못했습니다"; exit 1; }; \
+	if gh release view -R $(REPO) "$$VERSION" >/dev/null 2>&1; then \
+		echo "Release $$VERSION 이미 존재, 건너뜀"; \
+	else \
+		BODY="배포일\n* $$(TZ=Asia/Seoul date '+%Y/%m/%d')\n\n반영사항\n"; \
+		if [ -n '$(notes)' ]; then \
+			printf '%b' "$$BODY"'$(notes)' | gh release create -R $(REPO) "$$VERSION" --target master --title "$$VERSION" --notes-file -; \
+		else \
+			gh release create -R $(REPO) "$$VERSION" --target master --title "$$VERSION" --notes "$$(printf '%b' "$$BODY")" --generate-notes; \
+		fi; \
+	fi
 
 # master 의 Version.xcconfig 버전으로 태그 + GitHub Release 생성. 이미 있으면 건너뛰어 재실행해도 안전
 github-release: notes ?=

@@ -83,7 +83,7 @@ make qa-deploy branch=release-1.0.1
 ```
 - 수정 PR 이 몇 개 쌓였든 이 명령 한 번이 빌드 하나다. 필요할 때만 실행해 빌드 수를 조절한다.
 - 빌드 번호는 `release` 에서 +1 된다. `release-1.0.1` 의 번호는 바뀌지 않는다.
-- 같은 브랜치에서 연속으로 실행하면 앞선 run 은 취소된다 (최신 커밋만 빌드).
+- 같은 브랜치에서 연속으로 실행하면 앞선 run 은 취소된다 (최신 커밋만 빌드). 앞선 run 의 bump 가 이미 push 됐으면 그 번호는 빌드 없이 건너뛴다.
 
 ### 4.4 마감
 ```bash
@@ -124,7 +124,7 @@ master(태그)에서 `release-x.y.z` 를 분기하는 것만 다르고 나머지
 3. 둘 다 없으면 현재 값 유지
 4. 결정된 값이 현재 `MARKETING_VERSION` 과 **다르면** `x.y.z (1)`, **같으면** 빌드 번호 +1
 
-bump 커밋은 GITHUB_TOKEN 으로 push 되므로 Deploy 가 다시 돌지 않는다. `concurrency` 로 같은 브랜치의 이전 run 은 취소된다.
+bump 커밋은 GITHUB_TOKEN 으로 push 되므로 Deploy 가 다시 돌지 않는다. `concurrency` 로 같은 브랜치의 이전 run 은 취소된다. bump job 은 10초대에 끝나므로 취소는 대개 build job 에서 일어나고, 그때 이미 push 된 빌드 번호는 비게 된다 (단조 증가만 유지되면 문제 없음).
 
 ### Release Note (`release-note.yml`, ubuntu)
 master 에 push 되면 최근 20개 커밋에서 `release: x.y.z` 커밋을 찾아 태그와 GitHub Release 를 만든다. 없으면 아무것도 하지 않는다.

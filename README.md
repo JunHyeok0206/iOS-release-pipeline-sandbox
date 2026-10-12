@@ -11,6 +11,7 @@
 | `Config/Version.xcconfig` | `MARKETING_VERSION` / `CURRENT_PROJECT_VERSION`. 두 Info.plist 가 `$(…)` 로 참조. **CI 만 수정** |
 | `fastlane/Fastfile` | `bump`, `firebase`(stub), `test_flight`(stub) |
 | `Makefile` | 아래 명령어 표. 태그·GitHub Release 도 여기서 만든다 (`github-release`) |
+| `scripts/pr-body.sh` | Makefile 이 여는 PR 의 제목·본문 생성 (5절 "PR 제목·본문") |
 | `.github/workflows/release-start.yml` | 릴리스 시작 (3절) |
 | `.github/workflows/deploy.yml` | 배포 (5절) |
 
@@ -49,7 +50,7 @@ develop ─┬─ make release-start version=1.0.1
 | `make qa-deploy [branch=release-x.y.z]` | QA 수정분 배포. `release-x.y.z → release` PR 머지 → Deploy. branch 생략 시 현재 브랜치 |
 | `make deploy [lane=both\|firebase\|test_flight]` | 코드 변경 없이 재배포. 빌드 번호만 +1 |
 | `make deploy-firebase` / `make deploy-testflight` | 위의 단축 |
-| `make release-finish [branch=release-x.y.z] [notes="…"]` | 마감. `release → master`·`release → develop` PR 을 열고 → master 머지 → 태그·GitHub Release 생성 → develop 머지 → `release-x.y.z` 삭제. master/develop 에 리뷰 승인 규칙이 있으면 PR URL 을 안내하고 멈춘다. **승인 후 같은 명령을 다시 실행**하면 이어서 진행. 재실행해도 안전(이미 머지된 방향·이미 있는 Release·이미 삭제된 브랜치는 건너뜀) |
+| `make release-finish [branch=release-x.y.z] [notes="…"] [thread=<slack url>]` | 마감. `release → master`·`release → develop` PR 을 열고 → master 머지 → 태그·GitHub Release 생성 → develop 머지 → `release-x.y.z` 삭제. master/develop 에 리뷰 승인 규칙이 있으면 PR URL 을 안내하고 멈춘다. **승인 후 같은 명령을 다시 실행**하면 이어서 진행. 재실행해도 안전(이미 머지된 방향·이미 있는 Release·이미 삭제된 브랜치는 건너뜀) |
 | `make github-release [notes="…"]` | master 의 `Version.xcconfig` 버전으로 태그 + GitHub Release 만 생성. `release-finish` 가 내부에서 쓴다 |
 | `make release-finish … admin=1` | 룰셋 bypass 권한이 있는 계정이 승인 없이 머지(`gh pr merge --admin`). 혼자 쓰는 샌드박스 전용. 실서비스 레포에서는 쓰지 않는다 |
 | `make release-backmerge` | 재시도용. `release → develop` 머지만 |
@@ -126,6 +127,20 @@ bump 커밋은 GITHUB_TOKEN 으로 push 되므로 Deploy 가 다시 돌지 않�
 
 ### 태그·GitHub Release (Makefile `github-release`)
 워크플로가 아니라 `release-finish` 가 로컬에서 `gh release create` 로 만든다. master 머지 직후 동기로 실행되므로 실패가 바로 보인다. 같은 버전의 Release 가 이미 있으면 건너뛴다.
+
+### PR 제목·본문 (`scripts/pr-body.sh`)
+Makefile 이 여는 PR 세 종류는 사람이 쓰지 않고 스크립트가 git/gh 에서 뽑아 채운다. 생성은 PR 을 **처음 열 때만** 하고, 고치고 싶으면 GitHub 에서 직접 수정한다 (재실행해도 덮어쓰지 않는다).
+
+| PR | 제목 | 본문 | 리뷰 |
+|---|---|---|---|
+| `release-x.y.z → release` (`qa-deploy`) | `deploy: release-x.y.z (n건)` | `## 배포 내용` 아래에 `release` 에 아직 없는 변경: 머지된 PR(`#번호 제목`)과 직접 커밋 | 없음 (`release` 는 룰셋 밖) |
+| `release → master` (`release-finish`) | `release: x.y.z master에 반영` | 🎯 요약(버전, 빌드 번호, `thread=` 가 있으면 관련 스레드) / 📋 작업 배경(고정 문구) / 🔧 변경 사항 = 지난 태그 이후 머지된 PR 을 제목 접두어(`feat`/`fix`/`refactor`/`update`/`chore`/기타)별로 분류 | 승인 1명 |
+| `release → develop` (`release-finish`) | `release: x.y.z develop에 반영` | 위와 같고 작업 배경만 역병합 문구 | 승인 1명 |
+
+- 변경 사항 분류는 PR 제목의 `type:` 접두어를 그대로 쓴다. 접두어가 없으면 "기타" 로 들어간다.
+- `release-x.y.z → release` PR 과 bump 커밋은 변경 사항에서 제외한다 (배포 트리거일 뿐 변경이 아니다).
+- 범위 기준: `qa` 는 `origin/release..origin/release-x.y.z`, `release` 는 `<최신 태그>..origin/release` (태그가 없으면 전체). 테스트용으로 `FROM=<ref>` 환경변수로 시작점을 바꿀 수 있다.
+- 본문을 더 풍부하게 쓰고 싶으면 PR 을 연 뒤 Claude(`/create-pr` 규칙) 나 손으로 요약·배경을 보강한다. 스크립트는 사실 목록을 책임지고, 설명은 사람이 더한다.
 
 ## 6. 지켜야 할 규칙
 

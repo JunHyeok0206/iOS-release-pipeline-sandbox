@@ -139,7 +139,7 @@ Makefile 이 여는 PR 세 종류는 사람이 쓰지 않고 스크립트가 git
 
 - 변경 사항 분류는 PR 제목의 `type:` 접두어를 그대로 쓴다. 접두어가 없으면 "기타" 로 들어간다.
 - `release-x.y.z → release` PR 과 bump 커밋은 변경 사항에서 제외한다 (배포 트리거일 뿐 변경이 아니다).
-- 범위 기준: `qa` 는 `origin/release..origin/release-x.y.z`, `release` 는 `<최신 태그>..origin/release` (태그가 없으면 전체). 테스트용으로 `FROM=<ref>` 환경변수로 시작점을 바꿀 수 있다.
+- 범위 기준: `qa` 는 `origin/release..origin/release-x.y.z`. `release` 는 최신 태그가 찍힌 master 머지 커밋의 두 번째 부모(= 지난 마감 시점의 `release`)부터 `origin/release` 까지 (태그가 없으면 전체). first-parent 로 걸되 배포 PR·Release Start 머지는 한 단계 안쪽까지 봐서 QA 수정 PR 과 develop 의 feature PR 을 모두 줍는다. 테스트용으로 `FROM=<ref>` 환경변수로 시작점을 바꿀 수 있다.
 - 본문을 더 풍부하게 쓰고 싶으면 PR 을 연 뒤 Claude(`/create-pr` 규칙) 나 손으로 요약·배경을 보강한다. 스크립트는 사실 목록을 책임지고, 설명은 사람이 더한다.
 
 ## 6. 지켜야 할 규칙

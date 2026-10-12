@@ -123,8 +123,8 @@ master(태그)에서 `release-x.y.z` 를 분기하는 것만 다르고 나머지
 | job | 러너 | 내용 |
 |---|---|---|
 | `bump` | ubuntu | `release` 가 아니면 중단. 버전 결정(아래) → `Config/Version.xcconfig` 수정 → `release` 에 push |
-| `build (firebase)` | macos-26 | bump 커밋 체크아웃 → Xcode 26.6 → Tuist generate → `fastlane ios firebase` |
-| `build (test_flight)` | macos-26 | 위와 같고 `fastlane ios test_flight` |
+| `build firebase · x.y.z (n)` | macos-26 | bump 커밋 체크아웃 → Xcode 26.6 → Tuist generate → `fastlane ios firebase` |
+| `build test_flight · x.y.z (n)` | macos-26 | 위와 같고 `fastlane ios test_flight` |
 
 버전 결정 규칙:
 1. dispatch 입력 `version` 이 있으면 그 값
@@ -166,11 +166,11 @@ Makefile 이 여는 PR 세 종류는 사람이 쓰지 않고 스크립트가 git
    - `release-1.0.1` 브랜치가 develop 과 같은 커밋으로 생성됨 (버전 커밋 없음)
    - `release` 에 merge commit 이 push 되고, 워크플로가 Deploy 를 `version=1.0.1` 로 직접 실행
    - Deploy: `bump` 가 `Bump version to iOS 1.0.1 (1)` 을 `release` 에 push, 그 push 로 Deploy 가 다시 실행되지 않음
-   - `build (firebase)` 와 `build (test_flight)` 가 동시에 실행되고 둘 다 `(1)` 을 빌드. `xcodebuild -version` 이 `Xcode 26.6`
+   - `build firebase · 1.0.1 (1)` 과 `build test_flight · 1.0.1 (1)` 이 동시에 실행되고 둘 다 `(1)` 을 빌드. run 의 Summary 에 `Deploy iOS 1.0.1 (1)` 과 bump 커밋 링크가 표시된다. `xcodebuild -version` 이 `Xcode 26.6`
 2. `release-1.0.1` 에 커밋 1개 push → `make qa-deploy branch=release-1.0.1` → `(2)`
 3. 커밋 2개를 push 하고 `make qa-deploy` 를 두 번 연속 실행 → 첫 run 의 `build` job 이 `cancelled`, 두 번째가 `(4)`
    - 첫 run 의 `bump` 는 10초대에 끝나 `(3)` 을 이미 push 한 뒤라 취소되지 않는다. `(3)` 은 빌드되지 않은 채 건너뛴 번호로 남는다
-4. `make deploy-testflight` → `(5)`, `build (test_flight)` 만 실행
+4. `make deploy-testflight` → `(5)`, `build test_flight · 1.0.1 (5)` 만 실행
    - `gh workflow run Deploy -R JunHyeok0206/iOS-release-pipeline-sandbox --ref develop -f lane=both` 는 `bump` 첫 step 에서 실패
 5. `make release-finish branch=release-1.0.1 notes="- QA 수정 1\n- QA 수정 2"` → master 머지, 태그 `1.0.1` + GitHub Release(배포일·반영사항), develop back-merge(`Version.xcconfig` 가 `1.0.1`/`5`), `release-1.0.1` 삭제
    - 같은 명령을 다시 실행하면 네 단계 모두 "건너뜀" 으로 끝난다
@@ -210,6 +210,7 @@ Info.plist 안에 있으면 QA 수정이 바로 옆 줄을 고쳤을 때 충돌�
 | bump 커밋 push 가 거부됨 | `release` 에 보호 규칙(PR 필수)이 걸려 있다. 이 모델에서는 삭제·force-push 차단만 건다 |
 | Actions 탭이 비어 보임 | 실행 이력이 0 개면 그렇게 보인다. `make runs` 또는 워크플로 URL 로 직접 접근 |
 | Actions 목록에서 run 을 구분하기 어려움 | run 이름에 입력값이 들어간다: `Release Start 1.0.3`, `Deploy both 1.0.3`(dispatch), `Deploy push: <커밋 제목>`(push). 빌드 번호는 run 생성 뒤 bump 가 정하므로 이름에 넣을 수 없다 |
+| 어떤 빌드 번호가 배포됐는지 보고 싶음 | run 상세의 job 이름(`build firebase · 1.0.3 (2)`)과 Summary(`Deploy iOS 1.0.3 (2)`)에 나온다. run 이름에는 넣을 수 없다 |
 | `make release-start` 가 `No rule to make target` | 다른 디렉터리다. 레포 루트에서 실행 |
 | `release-finish` 가 "머지가 거부됨" 으로 멈춤 | master/develop 룰셋의 리뷰 승인 요구. 출력된 PR 을 다른 계정이 승인한 뒤 같은 명령 재실행. |
 | `release-finish` 가 중간에 멈춤 | 그대로 다시 실행. 이미 머지된 방향은 "머지할 커밋 없음", 이미 만든 Release 는 "이미 존재" 로 건너뛴다. develop 머지만 다시 하려면 `make release-backmerge` |

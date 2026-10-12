@@ -42,13 +42,32 @@ merge-release:
 		gh pr merge -R $(REPO) release --merge; \
 	fi
 
-# 릴리스 마감: release → master (태그·GitHub Release) → release → develop → release-x.y.z 삭제
+# 릴리스 마감: release → master 머지 → 태그·GitHub Release → release → develop 머지 → release-x.y.z 삭제
+# notes="- 항목1\n- 항목2" 를 주면 그 내용이 Release 본문, 생략하면 PR 제목으로 자동 생성
 release-finish: branch ?= $(shell git branch --show-current)
+release-finish: notes ?=
 release-finish:
 	$(MAKE) merge-release base=master
-	$(MAKE) watch workflow="Release Note"
+	$(MAKE) github-release notes='$(notes)'
 	$(MAKE) merge-release base=develop
 	@case "$(branch)" in release-*) git push origin --delete "$(branch)";; *) echo "release-x.y.z 삭제 건너뜀 (branch=$(branch))";; esac
+
+# master 의 Version.xcconfig 버전으로 태그 + GitHub Release 생성. 이미 있으면 건너뛰어 재실행해도 안전
+github-release: notes ?=
+github-release:
+	@git fetch -q origin master; \
+	VERSION=$$(git show origin/master:Config/Version.xcconfig | sed -n 's/^MARKETING_VERSION *= *//p'); \
+	test -n "$$VERSION" || { echo "origin/master 의 Config/Version.xcconfig 에서 버전을 읽지 못했습니다"; exit 1; }; \
+	if gh release view -R $(REPO) "$$VERSION" >/dev/null 2>&1; then \
+		echo "Release $$VERSION 이미 존재, 건너뜀"; \
+	else \
+		BODY="배포일\n* $$(TZ=Asia/Seoul date '+%Y/%m/%d')\n\n반영사항\n"; \
+		if [ -n '$(notes)' ]; then \
+			printf '%b' "$$BODY"'$(notes)' | gh release create -R $(REPO) "$$VERSION" --target master --title "$$VERSION" --notes-file -; \
+		else \
+			gh release create -R $(REPO) "$$VERSION" --target master --title "$$VERSION" --notes "$$(printf '%b' "$$BODY")" --generate-notes; \
+		fi; \
+	fi
 
 # 재시도용: release-finish 가 develop 머지에서 멈췄을 때
 release-backmerge:

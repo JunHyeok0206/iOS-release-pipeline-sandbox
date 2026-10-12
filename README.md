@@ -209,6 +209,7 @@ Info.plist 안에 있으면 QA 수정이 바로 옆 줄을 고쳤을 때 충돌�
 | PR 에 `Config/Version.xcconfig` 충돌 | 누군가 `release-x.y.z` 나 develop 에서 버전을 바꿨다. 해당 커밋에서 그 파일 변경만 되돌린다 |
 | bump 커밋 push 가 거부됨 | `release` 에 보호 규칙(PR 필수)이 걸려 있다. 이 모델에서는 삭제·force-push 차단만 건다 |
 | Actions 탭이 비어 보임 | 실행 이력이 0 개면 그렇게 보인다. `make runs` 또는 워크플로 URL 로 직접 접근 |
+| Actions 목록에서 run 을 구분하기 어려움 | run 이름에 입력값이 들어간다: `Release Start 1.0.3`, `Deploy both 1.0.3`(dispatch), `Deploy push: <커밋 제목>`(push). 빌드 번호는 run 생성 뒤 bump 가 정하므로 이름에 넣을 수 없다 |
 | `make release-start` 가 `No rule to make target` | 다른 디렉터리다. 레포 루트에서 실행 |
 | `release-finish` 가 "머지가 거부됨" 으로 멈춤 | master/develop 룰셋의 리뷰 승인 요구. 출력된 PR 을 다른 계정이 승인한 뒤 같은 명령 재실행. |
 | `release-finish` 가 중간에 멈춤 | 그대로 다시 실행. 이미 머지된 방향은 "머지할 커밋 없음", 이미 만든 Release 는 "이미 존재" 로 건너뛴다. develop 머지만 다시 하려면 `make release-backmerge` |

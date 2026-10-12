@@ -1,5 +1,6 @@
 # develop 에서 release-x.y.z 생성, release 에 머지한 뒤 Deploy 를 dispatch
 name: Release Start
+run-name: "Release Start ${{ inputs.version }}"
 
 on:
   workflow_dispatch:

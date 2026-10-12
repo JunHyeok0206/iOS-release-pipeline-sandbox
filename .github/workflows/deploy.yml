@@ -1,3 +1,4 @@
+# release 브랜치 push 또는 workflow_dispatch 로 bump → firebase / test_flight 빌드
 name: Deploy
 
 on:

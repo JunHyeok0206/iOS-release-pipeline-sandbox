@@ -146,10 +146,11 @@ master 에 push 되면 최근 20개 커밋에서 `release: x.y.z` 커밋을 찾�
    - Deploy: `bump` 가 `Bump version to iOS 1.0.1 (1)` 을 `release` 에 push, 그 push 로 Deploy 가 다시 실행되지 않음
    - `build (firebase)` 와 `build (test_flight)` 가 동시에 실행되고 둘 다 `(1)` 을 빌드. `xcodebuild -version` 이 `Xcode 26.6`
 2. `release-1.0.1` 에 커밋 1개 push → `make qa-deploy branch=release-1.0.1` → `(2)`
-3. 커밋 2개를 push 하고 `make qa-deploy` 를 두 번 연속 실행 → 첫 run 의 job 이 전부 `cancelled`, 두 번째가 `(3)`
-4. `make deploy-testflight` → `(4)`, `build (test_flight)` 만 실행
+3. 커밋 2개를 push 하고 `make qa-deploy` 를 두 번 연속 실행 → 첫 run 의 `build` job 이 `cancelled`, 두 번째가 `(4)`
+   - 첫 run 의 `bump` 는 10초대에 끝나 `(3)` 을 이미 push 한 뒤라 취소되지 않는다. `(3)` 은 빌드되지 않은 채 건너뛴 번호로 남는다
+4. `make deploy-testflight` → `(5)`, `build (test_flight)` 만 실행
    - `gh workflow run Deploy -R JunHyeok0206/iOS-release-pipeline-sandbox --ref develop -f lane=both` 는 `bump` 첫 step 에서 실패
-5. `release-1.0.1` 에 빈 커밋 `release: 1.0.1` (본문 = 릴리즈 노트) → `make qa-deploy branch=release-1.0.1` → `(5)`
+5. `release-1.0.1` 에 빈 커밋 `release: 1.0.1` (본문 = 릴리즈 노트) → `make qa-deploy branch=release-1.0.1` → `(6)`
    - `make release-finish branch=release-1.0.1` → Release Note 가 태그 `1.0.1` 과 GitHub Release 생성, develop back-merge, `release-1.0.1` 삭제
 6. `make release-start version=1.0.2` → 충돌 없이 `release` 에 머지되고 Deploy 가 `1.0.2 (1)`
 7. 충돌 내성 확인: `release-1.0.2` 에서 `TestApp/Resources/Info.plist` 의 아무 키나 수정해 push → `make qa-deploy` 가 충돌 없이 머지됨 (버전이 xcconfig 로 분리됐기 때문)

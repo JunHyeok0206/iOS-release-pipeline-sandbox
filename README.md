@@ -51,6 +51,7 @@ develop ─┬─ make release-start version=1.0.1
 | `make deploy-firebase` / `make deploy-testflight` | 위의 단축 |
 | `make release-finish [branch=release-x.y.z] [notes="…"]` | 마감. `release → master`·`release → develop` PR 을 열고 → master 머지 → 태그·GitHub Release 생성 → develop 머지 → `release-x.y.z` 삭제. master/develop 에 리뷰 승인 규칙이 있으면 PR URL 을 안내하고 멈춘다. **승인 후 같은 명령을 다시 실행**하면 이어서 진행. 재실행해도 안전(이미 머지된 방향·이미 있는 Release·이미 삭제된 브랜치는 건너뜀) |
 | `make github-release [notes="…"]` | master 의 `Version.xcconfig` 버전으로 태그 + GitHub Release 만 생성. `release-finish` 가 내부에서 쓴다 |
+| `make release-finish … admin=1` | 룰셋 bypass 권한이 있는 계정이 승인 없이 머지(`gh pr merge --admin`). 혼자 쓰는 샌드박스 전용. 실서비스 레포에서는 쓰지 않는다 |
 | `make release-backmerge` | 재시도용. `release → develop` 머지만 |
 | `make merge-release base=master\|develop` | `release → base` PR 머지 한 방향. 위 두 타깃이 내부에서 쓴다 |
 | `make runs` | 최근 실행 10개 |

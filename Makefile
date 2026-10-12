@@ -39,7 +39,6 @@ deploy-testflight:
 # release → $(base) PR 머지. 머지할 커밋이 없으면 건너뛰어 재실행해도 안전.
 # base 에 리뷰 승인 규칙이 있으면 머지가 거부된다 → PR URL 을 안내하고 멈춘다. 승인 후 같은 명령을 다시 실행
 merge-release: base ?=
-merge-release: admin ?=
 merge-release: thread ?=
 merge-release:
 	@test -n "$(base)" || { echo "usage: make merge-release base=master|develop"; exit 1; }
@@ -48,7 +47,7 @@ merge-release:
 		echo "release → $(base): 머지할 커밋 없음, 건너뜀"; \
 	else \
 		URL=$$($(MAKE) -s open-release-pr base=$(base) thread='$(thread)'); \
-		if gh pr merge -R $(REPO) "$$URL" --merge $(if $(admin),--admin,); then \
+		if gh pr merge -R $(REPO) "$$URL" --merge; then \
 			echo "release → $(base): 머지 완료 $$URL"; \
 		else \
 			echo ""; echo "release → $(base) 머지가 거부됨. 리뷰 승인이 필요하면 승인 후 같은 명령을 다시 실행: $$URL"; exit 1; \
@@ -69,21 +68,19 @@ open-release-pr:
 
 # 릴리스 마감: release → master 머지 → 태그·GitHub Release → release → develop 머지 → release-x.y.z 삭제
 # master/develop 에 리뷰 승인 규칙이 있으면 두 PR 을 먼저 열고 멈춘다. 승인 후 같은 명령을 다시 실행하면 이어서 진행
-# admin=1 : 룰셋 bypass 권한이 있는 계정이 승인 없이 머지 (gh pr merge --admin). 혼자 쓰는 샌드박스 전용, 실서비스 레포에서는 쓰지 않는다
 # notes="- 항목1\n- 항목2" 를 주면 그 내용이 Release 본문, 생략하면 PR 제목으로 자동 생성
 # thread=<slack url> 을 주면 PR 본문 요약에 관련 스레드 링크를 넣는다 (scripts/pr-body.sh)
 release-finish: branch ?= $(shell git branch --show-current)
 release-finish: notes ?=
-release-finish: admin ?=
 release-finish: thread ?=
 release-finish:
 	@git fetch -q origin release master develop; \
 	for b in master develop; do \
 		if [ "$$(git rev-list --count origin/$$b..origin/release)" != "0" ]; then echo "release → $$b PR: $$($(MAKE) -s open-release-pr base=$$b thread='$(thread)')"; fi; \
 	done
-	$(MAKE) merge-release base=master admin=$(admin) thread='$(thread)'
+	$(MAKE) merge-release base=master thread='$(thread)'
 	$(MAKE) github-release notes='$(notes)'
-	$(MAKE) merge-release base=develop admin=$(admin) thread='$(thread)'
+	$(MAKE) merge-release base=develop thread='$(thread)'
 	@case "$(branch)" in \
 		release-*) if git ls-remote --exit-code --heads origin "$(branch)" >/dev/null; then git push origin --delete "$(branch)"; else echo "$(branch) 이미 삭제됨, 건너뜀"; fi;; \
 		*) echo "release-x.y.z 삭제 건너뜀 (branch=$(branch))";; \

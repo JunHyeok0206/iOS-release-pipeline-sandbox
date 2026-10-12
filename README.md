@@ -52,7 +52,6 @@ develop ─┬─ make release-start version=1.0.1
 | `make deploy-firebase` / `make deploy-testflight` | 위의 단축 |
 | `make release-finish [branch=release-x.y.z] [notes="…"] [thread=<slack url>]` | 마감. `release → master`·`release → develop` PR 을 열고 → master 머지 → 태그·GitHub Release 생성 → develop 머지 → `release-x.y.z` 삭제. master/develop 에 리뷰 승인 규칙이 있으면 PR URL 을 안내하고 멈춘다. **승인 후 같은 명령을 다시 실행**하면 이어서 진행. 재실행해도 안전(이미 머지된 방향·이미 있는 Release·이미 삭제된 브랜치는 건너뜀) |
 | `make github-release [notes="…"]` | master 의 `Version.xcconfig` 버전으로 태그 + GitHub Release 만 생성. `release-finish` 가 내부에서 쓴다 |
-| `make release-finish … admin=1` | 룰셋 bypass 권한이 있는 계정이 승인 없이 머지(`gh pr merge --admin`). 혼자 쓰는 샌드박스 전용. 실서비스 레포에서는 쓰지 않는다 |
 | `make release-backmerge` | 재시도용. `release → develop` 머지만 |
 | `make merge-release base=master\|develop` | `release → base` PR 머지 한 방향. 위 두 타깃이 내부에서 쓴다 |
 | `make runs` | 최근 실행 10개 |
@@ -93,7 +92,7 @@ make release-finish branch=release-1.0.1 notes="- 항목 1\n- 항목 2"
 ```
 - 마지막 `qa-deploy` 빌드가 제출 빌드다. 마감 전에 별도 빌드를 만들지 않는다.
 - `release-finish` 는 `release → master`·`release → develop` PR 두 개를 먼저 연 뒤, master 머지 → 태그 `1.0.1` + GitHub Release 생성 → develop 머지 → `release-1.0.1` 삭제를 순서대로 한다.
-- master·develop 에 "리뷰 승인 1명" 규칙이 걸려 있으면 머지가 거부되고 PR URL 을 출력하며 멈춘다. 리뷰어가 두 PR 을 승인한 뒤 **같은 명령을 다시 실행**한다. PR 작성자는 자기 PR 을 승인할 수 없으므로 다른 계정이 필요하다. (이 레포의 `GUARD` 룰셋이 그 규칙이다)
+- master·develop 에 "리뷰 승인 1명" 규칙이 걸려 있으면 머지가 거부되고 PR URL 을 출력하며 멈춘다. 리뷰어가 두 PR 을 승인한 뒤 **같은 명령을 다시 실행**한다. PR 작성자는 자기 PR 을 승인할 수 없으므로 다른 계정이 필요하다.
 - Release 본문은 `배포일` + `반영사항` 형식이다. `notes` 의 `\n` 은 줄바꿈으로 바뀐다. `notes` 를 생략하면 머지된 PR 제목으로 자동 생성한다.
 - 버전은 머지 후 master 의 `Config/Version.xcconfig` 에서 읽는다. 태그는 master 의 머지 커밋을 가리킨다.
 - 두 머지 모두 merge commit 이다. squash 하지 않는다.
@@ -201,7 +200,7 @@ Info.plist 안에 있으면 QA 수정이 바로 옆 줄을 고쳤을 때 충돌�
 | bump 커밋 push 가 거부됨 | `release` 에 보호 규칙(PR 필수)이 걸려 있다. 이 모델에서는 삭제·force-push 차단만 건다 |
 | Actions 탭이 비어 보임 | 실행 이력이 0 개면 그렇게 보인다. `make runs` 또는 워크플로 URL 로 직접 접근 |
 | `make release-start` 가 `No rule to make target` | 다른 디렉터리다. 레포 루트에서 실행 |
-| `release-finish` 가 "머지가 거부됨" 으로 멈춤 | master/develop 룰셋의 리뷰 승인 요구. 출력된 PR 을 다른 계정이 승인한 뒤 같은 명령 재실행. 혼자 쓰는 레포면 룰셋 bypass 에 Repository admin 추가 |
+| `release-finish` 가 "머지가 거부됨" 으로 멈춤 | master/develop 룰셋의 리뷰 승인 요구. 출력된 PR 을 다른 계정이 승인한 뒤 같은 명령 재실행. |
 | `release-finish` 가 중간에 멈춤 | 그대로 다시 실행. 이미 머지된 방향은 "머지할 커밋 없음", 이미 만든 Release 는 "이미 존재" 로 건너뛴다. develop 머지만 다시 하려면 `make release-backmerge` |
 | `gh release create` 가 tag already exists | 같은 버전 태그가 있다. 버전이 맞는지 확인하고, 재배포면 태그를 지우거나 버전을 올린다 |
 | `gh pr merge` 가 "no pull requests found" | 같은 head 로 열린 PR 이 없다. `make merge-release base=…` 가 PR 생성부터 다시 한다 |

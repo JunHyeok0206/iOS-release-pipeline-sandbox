@@ -34,6 +34,7 @@ jobs:
     timeout-minutes: 10
     outputs:
       sha: ${{ steps.push.outputs.sha }}
+      version: ${{ steps.push.outputs.version }}
       lanes: ${{ steps.lanes.outputs.lanes }}
     steps:
       - if: ${{ github.ref != 'refs/heads/release' }}
@@ -70,6 +71,9 @@ jobs:
           git push "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" \
             "HEAD:refs/heads/${{ github.ref_name }}"
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          NEW_VERSION=$(sed -n 's/^MARKETING_VERSION *= *//p' Config/Version.xcconfig)
+          NEW_BUILD=$(sed -n 's/^CURRENT_PROJECT_VERSION *= *//p' Config/Version.xcconfig)
+          echo "version=$NEW_VERSION ($NEW_BUILD)" >> "$GITHUB_OUTPUT"
 
       - name: Select lanes
         id: lanes
@@ -80,7 +84,18 @@ jobs:
             *)           echo 'lanes=["firebase","test_flight"]' ;;
           esac >> "$GITHUB_OUTPUT"
 
+      - name: Summary
+        run: |
+          {
+            echo "## Deploy iOS ${{ steps.push.outputs.version }}"
+            echo
+            echo "- lanes: $(echo '${{ steps.lanes.outputs.lanes }}' | tr -d '[]\"' | sed 's/,/, /g')"
+            echo "- bump commit: [\`$(git rev-parse --short HEAD)\`](${{ github.server_url }}/${{ github.repository }}/commit/${{ steps.push.outputs.sha }})"
+            echo "- trigger: ${{ github.event_name }}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
   build:
+    name: build ${{ matrix.lane }} · ${{ needs.bump.outputs.version }}
     needs: bump
     runs-on: macos-26
     timeout-minutes: 60

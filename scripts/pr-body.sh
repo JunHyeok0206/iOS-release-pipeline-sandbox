@@ -57,7 +57,7 @@ walk() { # $1=base(비어 있을 수 있음) $2=tip
         num="$(printf '%s' "$subject" | sed -E 's/^Merge pull request #([0-9]+).*/\1/')"
         head="$(printf '%s' "$subject" | sed -E 's/^Merge pull request #[0-9]+ from [^/]+\/(.*)$/\1/')"
         case "$head" in
-          release)   continue ;;                                              # 역병합 PR
+          release|release/*) continue ;;                                      # 역병합 PR (release/x.y.z 는 구형 브랜치)
           release-*) [ "$DEPTH" = "0" ] && DEPTH=1 walk "${sha}^1" "${sha}^2"; continue ;;   # 배포 PR: release-x.y.z 쪽을 한 단계 더 걸음
         esac
         title="$(gh pr view "$num" -R "$REPO" --json title -q .title 2>/dev/null || echo "PR #$num")"

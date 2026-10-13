@@ -1,5 +1,6 @@
 REPO := JunHyeok0206/iOS-release-pipeline-sandbox
-VERSION_XCCONFIG := Config/Version.xcconfig   # scripts/pr-body.sh 가 버전을 읽는 파일
+# scripts/pr-body.sh 가 버전을 읽는 파일 (값 뒤에 주석을 붙이면 끝 공백이 값에 포함되므로 윗줄에 둔다)
+VERSION_XCCONFIG := Config/Version.xcconfig
 
 generate:
 	mise install

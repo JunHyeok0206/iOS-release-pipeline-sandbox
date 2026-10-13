@@ -41,12 +41,13 @@ deploy-testflight:
 open-release-pr: base ?=
 open-release-pr: thread ?=
 open-release-pr:
-	@URL=$$(gh pr list -R $(REPO) --base $(base) --head release --state open --json url -q '.[0].url'); \
+	@URL=$$(gh pr list -R $(REPO) --base $(base) --head release --state open --json url -q '.[0].url') || exit 1; \
 	if [ -z "$$URL" ]; then \
-		URL=$$(gh pr create -R $(REPO) --base $(base) --head release \
-			--title "$$(REPO=$(REPO) VERSION_XCCONFIG=$(VERSION_XCCONFIG) scripts/pr-body.sh title release $(base))" \
-			--body "$$(REPO=$(REPO) VERSION_XCCONFIG=$(VERSION_XCCONFIG) scripts/pr-body.sh body release $(base) '$(thread)')" 2>/dev/null); \
+		TITLE=$$(REPO=$(REPO) VERSION_XCCONFIG=$(VERSION_XCCONFIG) scripts/pr-body.sh title release $(base)) || exit 1; \
+		BODY=$$(REPO=$(REPO) VERSION_XCCONFIG=$(VERSION_XCCONFIG) scripts/pr-body.sh body release $(base) '$(thread)') || exit 1; \
+		URL=$$(gh pr create -R $(REPO) --base $(base) --head release --title "$$TITLE" --body "$$BODY") || exit 1; \
 	fi; \
+	[ -n "$$URL" ] || { echo "release → $(base) PR URL 을 얻지 못했습니다" >&2; exit 1; }; \
 	echo "$$URL"
 
 # 릴리스 마감: release → master, release → develop PR 을 연다. 여기까지가 로컬의 역할.
@@ -59,7 +60,8 @@ release-finish:
 		if [ "$$(git rev-list --count origin/$$b..origin/release)" = "0" ]; then \
 			echo "release → $$b: 머지할 커밋 없음, 건너뜀"; \
 		else \
-			echo "release → $$b PR: $$($(MAKE) -s open-release-pr base=$$b thread='$(thread)')"; \
+			URL=$$($(MAKE) -s open-release-pr base=$$b thread='$(thread)') || exit 1; \
+			echo "release → $$b PR: $$URL"; \
 		fi; \
 	done; \
 	echo ""; echo "리뷰 승인 후 GitHub 에서 두 PR 을 머지하세요. master 머지 시 Release Finish 워크플로가 태그·GitHub Release 생성과 release-x.y.z 삭제를 합니다."

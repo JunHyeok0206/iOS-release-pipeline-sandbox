@@ -33,8 +33,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
-      sha: ${{ steps.push.outputs.sha }}
-      version: ${{ steps.push.outputs.version }}
+      sha: ${{ steps.reuse.outputs.sha || steps.push.outputs.sha }}
+      version: ${{ steps.reuse.outputs.version || steps.push.outputs.version }}
       lanes: ${{ steps.lanes.outputs.lanes }}
     steps:
       - if: ${{ github.ref != 'refs/heads/release' }}
@@ -42,23 +42,45 @@ jobs:
           echo "::error::release 브랜치에서만 실행할 수 있습니다 (현재: ${{ github.ref }})"
           exit 1
 
+      # 이벤트 SHA 가 아니라 release 의 현재 tip 을 받는다. 재실행이나 연속 deploy 로 tip 이 앞서 있어도 push 가 non-fast-forward 로 거절되지 않도록
       - uses: actions/checkout@v5
         with:
+          ref: release
+          fetch-depth: 2
           persist-credentials: false
 
+      # 재실행(Re-run all jobs)이면 이전 attempt 가 push 한 bump 를 그대로 쓴다: tip 이 "Bump version" 커밋이고 그 부모가 이 run 의 이벤트 SHA
+      - name: Reuse bump from previous attempt
+        id: reuse
+        if: ${{ github.run_attempt > 1 }}
+        run: |
+          if [ "$(git rev-parse HEAD^)" = "${{ github.sha }}" ] && git log -1 --format=%s | grep -q '^Bump version to iOS'; then
+            VERSION=$(sed -n 's/^MARKETING_VERSION *= *//p' Config/Version.xcconfig)
+            BUILD=$(sed -n 's/^CURRENT_PROJECT_VERSION *= *//p' Config/Version.xcconfig)
+            echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+            echo "version=$VERSION ($BUILD)" >> "$GITHUB_OUTPUT"
+            echo "이전 attempt 의 bump $(git rev-parse --short HEAD) 재사용 ($VERSION ($BUILD))"
+          else
+            echo "재사용할 bump 없음 → 새로 bump"
+          fi
+
       - uses: ruby/setup-ruby@v1
+        if: ${{ !steps.reuse.outputs.sha }}
         with:
           ruby-version: '3.4'
           bundler-cache: true
 
-      # 버전 결정 순서: dispatch 입력 → HEAD 커밋 메시지의 release-x.y.z → 없으면 현재 값 유지
+      # 버전 결정 순서: dispatch 입력 → push 이벤트 커밋 메시지의 release-x.y.z → 없으면 현재 값 유지
       # 현재 값과 다르면 x.y.z (1) 로 시작, 같으면 빌드 번호 +1
       - name: Bump version and push
         id: push
+        if: ${{ !steps.reuse.outputs.sha }}
+        env:
+          HEAD_MSG: ${{ github.event.head_commit.message }}
         run: |
           VERSION="${{ github.event.inputs.version }}"
           if [ -z "$VERSION" ]; then
-            VERSION=$(git log -1 --format=%s | grep -oE 'release-[0-9]+\.[0-9]+\.[0-9]+' | head -1 | sed 's/^release-//' || true)
+            VERSION=$(printf '%s' "$HEAD_MSG" | head -1 | grep -oE 'release-[0-9]+\.[0-9]+\.[0-9]+' | head -1 | sed 's/^release-//' || true)
           fi
           CURRENT=$(sed -n 's/^MARKETING_VERSION *= *//p' Config/Version.xcconfig)
           git config user.name  "github-actions[bot]"
@@ -85,12 +107,16 @@ jobs:
           esac >> "$GITHUB_OUTPUT"
 
       - name: Summary
+        env:
+          VERSION: ${{ steps.reuse.outputs.version || steps.push.outputs.version }}
+          SHA: ${{ steps.reuse.outputs.sha || steps.push.outputs.sha }}
+          REUSED: ${{ steps.reuse.outputs.sha != '' }}
         run: |
           {
-            echo "## Deploy iOS ${{ steps.push.outputs.version }}"
+            echo "## Deploy iOS $VERSION"
             echo
             echo "- lanes: $(echo '${{ steps.lanes.outputs.lanes }}' | tr -d '[]\"' | sed 's/,/, /g')"
-            echo "- bump commit: [\`$(git rev-parse --short HEAD)\`](${{ github.server_url }}/${{ github.repository }}/commit/${{ steps.push.outputs.sha }})"
+            echo "- bump commit: [\`$(git rev-parse --short "$SHA")\`](${{ github.server_url }}/${{ github.repository }}/commit/$SHA)$([ "$REUSED" = true ] && echo ' (재실행: 이전 attempt 의 bump 재사용)' || true)"
             echo "- trigger: ${{ github.event_name }}"
           } >> "$GITHUB_STEP_SUMMARY"
 

@@ -12,6 +12,8 @@
 | `fastlane/Fastfile` | `bump`, `firebase`(stub), `test_flight`(stub) |
 | `Makefile` | 아래 명령어 표 |
 | `.github/workflows/release-finish.yml` | `master` push 시 태그·GitHub Release 생성, `release-x.y.z` 삭제 (5절) |
+| `scripts/ci/set-secrets.sh` | `fastlane/.env` 의 값을 GitHub Actions Secret 으로 등록 (샌드박스는 시크릿을 쓰지 않으므로 구조 검증용) |
+| `fastlane/.env.example` | 시크릿 이름과 출처. 실제 값은 gitignore 된 `fastlane/.env` 에 |
 | `scripts/pr-body.sh` | Makefile 이 여는 PR 의 제목·본문 생성 (5절 "PR 제목·본문") |
 | `.github/workflows/release-start.yml` | 릴리스 시작 (3절) |
 | `.github/workflows/deploy.yml` | 배포 (5절) |
@@ -102,7 +104,7 @@ make release-finish thread=https://linkareer.slack.com/archives/…   # thread �
 ```
 1. `release → master`, `release → develop` PR 두 개가 열린다. 제목·본문은 자동(5절 "PR 제목·본문"). 여기까지가 로컬의 역할이다.
 2. 리뷰어가 두 PR 을 승인한다. PR 작성자는 자기 PR 을 승인할 수 없으므로 다른 계정이 필요하다.
-3. GitHub 에서 두 PR 을 **Merge commit** 으로 머지한다 (squash 금지).
+3. GitHub 에서 두 PR 을 **Merge commit** 으로 머지한다 (squash 금지). 머지 후 나오는 **Delete branch 버튼은 누르지 않는다.** head 가 영구 브랜치 `release` 라 지워진다.
 4. master 머지로 `Release Finish` 워크플로가 돌아 태그 `1.0.1` + GitHub Release 를 만들고 `release-1.0.1` 을 지운다. Release 본문은 `배포일` + PR 본문의 🔧 변경 사항. 손으로 다듬고 싶으면 머지 전에 PR 본문을 고친다.
 
 - 마지막 `qa-deploy` 빌드가 제출 빌드다. 마감 전에 별도 빌드를 만들지 않는다.
@@ -156,7 +158,7 @@ Makefile 이 여는 PR 세 종류는 사람이 쓰지 않고 스크립트가 git
 
 1. **`Config/Version.xcconfig` 는 CI 만 수정한다.** 로컬에서 `fastlane ios bump` 를 돌려 push 하지 않는다. 어기면 다음 머지에서 충돌한다.
 2. **머지는 전부 merge commit.** `release-x.y.z → release`, `release → master`, `release → develop` 모두. squash·rebase 금지.
-3. **`release` 에 직접 push 하지 않는다.** PR 머지와 CI 커밋만 들어간다.
+3. **`release` 에 직접 push 하지 않고, 지우지 않는다.** PR 머지와 CI 커밋만 들어간다. `release → master/develop` PR 을 머지한 뒤 GitHub 가 보여 주는 Delete branch 버튼은 `release` 를 지우므로 누르지 않는다.
 4. **한 번에 한 버전만.** 이전 버전이 master 로 나가기 전에 다음 `release-start` 를 하지 않는다.
 5. **QA 수정 브랜치는 `origin/release-x.y.z` 에서 분기**하고 base 도 거기로.
 6. back-merge 를 생략해도 충돌은 나지 않지만, develop 이 구버전 번호를 갖게 되므로 사이클마다 한다.
@@ -205,7 +207,9 @@ Info.plist 안에 있으면 QA 수정이 바로 옆 줄을 고쳤을 때 충돌�
 
 | 증상 | 원인 / 조치 |
 |---|---|
-| `release-x.y.z 브랜치가 이미 있습니다` | 같은 버전을 두 번 시작. 브랜치를 지우고 다시 하거나 버전을 바꾼다 |
+| `Release Start` 가 중간에 실패 | 그대로 Re-run. 브랜치가 develop 과 같은 커밋이면 생성을 건너뛰고 머지·Deploy 호출을 이어서 한다 |
+| `release-x.y.z 브랜치가 이미 있고 develop 과 다릅니다` | 그 버전의 QA 가 진행 중이거나 develop 이 바뀌었다. 재개가 목적이면 브랜치를 지우고 다시 실행, 아니면 버전을 바꾼다 |
+| `Deploy` 의 build 가 실패 | **Re-run failed jobs** 를 쓴다 (bump 는 다시 돌지 않음). Re-run all jobs 를 눌러도 bump 는 이전 attempt 의 커밋을 재사용하므로 번호가 또 오르지 않는다 |
 | `gh run watch` 가 run ID 를 요구 | `make watch workflow=…` 를 쓴다 (최신 run 을 찾아 준다) |
 | PR 에 `Config/Version.xcconfig` 충돌 | 누군가 `release-x.y.z` 나 develop 에서 버전을 바꿨다. 해당 커밋에서 그 파일 변경만 되돌린다 |
 | bump 커밋 push 가 거부됨 | `release` 에 보호 규칙(PR 필수)이 걸려 있다. 이 모델에서는 삭제·force-push 차단만 건다 |
@@ -215,6 +219,7 @@ Info.plist 안에 있으면 QA 수정이 바로 옆 줄을 고쳤을 때 충돌�
 | `make release-start` 가 `No rule to make target` | 다른 디렉터리다. 레포 루트에서 실행 |
 | `Release Finish` 가 실패 | Actions 에서 Re-run. Release 가 이미 있으면 생성은 건너뛰고 브랜치 삭제만 다시 한다 |
 | `Release Finish` 가 돌았는데 Release 가 없음 | master 의 `Version.xcconfig` 버전과 같은 태그가 이미 있었다. 버전이 올라가지 않은 채 머지된 경우다 |
+| `release` 브랜치가 사라짐 | `release → master` PR 머지 후 Delete branch 를 눌렀다. `git push origin origin/master:refs/heads/release` 로 복구한다 (master 가 직전 release 와 같은 내용). 다음 `release-start` 는 그대로 동작 |
 | `gh pr merge` 가 "no pull requests found" (`qa-deploy`) | 같은 head 로 열린 PR 이 없다. `make qa-deploy` 를 다시 실행하면 PR 생성부터 한다 |
 
 ## 10. 로컬
@@ -225,3 +230,13 @@ mise x -- tuist generate
 bundle install
 bundle exec fastlane ios bump version:1.0.0 build:0   # 동작 확인용. 결과 커밋은 push 하지 않는다 (Version.xcconfig 는 CI 만 수정)
 ```
+
+## 11. 시크릿 운영
+
+샌드박스는 시크릿 없이 돌지만, Timespread 와 같은 구조를 두어 스크립트를 검증한다.
+
+- **누가**: 리포 admin. write 권한으로는 Secret 을 만들 수 없다.
+- **언제**: 최초 1회(첫 Deploy 전), 이후 값이 바뀔 때만. 정기 만료는 없다.
+- **어떻게**: `fastlane/.env` 를 `fastlane/.env.example` 대로 채운 뒤 `sh scripts/ci/set-secrets.sh`. 다른 위치의 파일을 쓰려면 `ENV_FILE=<경로> sh scripts/ci/set-secrets.sh`. 특수문자가 든 값은 작은따옴표로 감싼다. 재실행하면 덮어쓴다.
+- 등록된 값은 GitHub 에서 다시 읽을 수 없으니 원본은 팀 공유 금고에 둔다.
+

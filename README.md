@@ -131,7 +131,7 @@ master(태그)에서 `release-x.y.z` 를 분기하는 것만 다르고 나머지
 
 버전 결정 규칙:
 1. dispatch 입력 `version` 이 있으면 그 값
-2. 없으면 HEAD 커밋 메시지에서 `release-x.y.z` 를 찾는다 (PR 머지 커밋에는 head 브랜치 이름이 들어 있다)
+2. 없으면 push 이벤트 커밋 메시지에서 `release-x.y.z` 를 찾는다 (PR 머지 커밋에는 head 브랜치 이름이 들어 있다)
 3. 둘 다 없으면 현재 값 유지
 4. 결정된 값이 현재 `MARKETING_VERSION` 과 **다르면** `x.y.z (1)`, **같으면** 빌드 번호 +1
 

@@ -12,6 +12,8 @@
 | `fastlane/Fastfile` | `bump`, `firebase`(stub), `test_flight`(stub) |
 | `Makefile` | 아래 명령어 표 |
 | `.github/workflows/release-finish.yml` | `master` push 시 태그·GitHub Release 생성, `release-x.y.z` 삭제 (5절) |
+| `scripts/ci/set-secrets.sh` | `fastlane/.env` 의 값을 GitHub Actions Secret 으로 등록 (샌드박스는 시크릿을 쓰지 않으므로 구조 검증용) |
+| `fastlane/.env.example` | 시크릿 이름과 출처. 실제 값은 gitignore 된 `fastlane/.env` 에 |
 | `scripts/pr-body.sh` | Makefile 이 여는 PR 의 제목·본문 생성 (5절 "PR 제목·본문") |
 | `.github/workflows/release-start.yml` | 릴리스 시작 (3절) |
 | `.github/workflows/deploy.yml` | 배포 (5절) |
@@ -226,3 +228,13 @@ mise x -- tuist generate
 bundle install
 bundle exec fastlane ios bump version:1.0.0 build:0   # 동작 확인용. 결과 커밋은 push 하지 않는다 (Version.xcconfig 는 CI 만 수정)
 ```
+
+## 11. 시크릿 운영
+
+샌드박스는 시크릿 없이 돌지만, Timespread 와 같은 구조를 두어 스크립트를 검증한다.
+
+- **누가**: 리포 admin. write 권한으로는 Secret 을 만들 수 없다.
+- **언제**: 최초 1회(첫 Deploy 전), 이후 값이 바뀔 때만. 정기 만료는 없다.
+- **어떻게**: `fastlane/.env` 를 `fastlane/.env.example` 대로 채운 뒤 `sh scripts/ci/set-secrets.sh`. 다른 위치의 파일을 쓰려면 `ENV_FILE=<경로> sh scripts/ci/set-secrets.sh`. 특수문자가 든 값은 작은따옴표로 감싼다. 재실행하면 덮어쓴다.
+- 등록된 값은 GitHub 에서 다시 읽을 수 없으니 원본은 팀 공유 금고에 둔다.
+

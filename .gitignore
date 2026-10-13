@@ -12,3 +12,4 @@ fastlane/README.md
 .bundle/
 vendor/
 build/
+fastlane/.env

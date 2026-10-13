@@ -15,7 +15,7 @@ MODE="${1:-}"; KIND="${2:-}"; TARGET="${3:-}"; THREAD="${4:-}"
 
 REPO="${REPO:-$(gh repo view --json nameWithOwner -q .nameWithOwner)}"
 VERSION_XCCONFIG="${VERSION_XCCONFIG:-Config/Version.xcconfig}"
-git fetch -q origin
+git fetch -q origin --tags
 
 xcconfig_value() { git show "origin/release:$VERSION_XCCONFIG" | sed -n "s/^$1 *= *//p"; }
 VERSION="$(xcconfig_value MARKETING_VERSION)"
@@ -34,6 +34,8 @@ case "$KIND" in
       BASE=""
       if [ -n "$LAST_TAG" ]; then
         BASE="$(git rev-parse -q --verify "$LAST_TAG^2" 2>/dev/null || git merge-base "$LAST_TAG" origin/release)"
+      else
+        BASE="$(git merge-base origin/master origin/release 2>/dev/null || echo "")"   # 태그가 없으면 master 분기점부터 (전체 히스토리 순회 방지)
       fi
     fi ;;
   *) echo "kind 는 qa | release" >&2; exit 1 ;;

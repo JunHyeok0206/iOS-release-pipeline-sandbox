@@ -31,13 +31,24 @@ jobs:
           ref: develop
           fetch-depth: 0
 
-      - name: Ensure branch does not exist
+      # 같은 버전 재실행 지원. 브랜치가 없으면 만든다. 있는데 develop 과 같은 커밋이면 직전 Release Start 가 만들다 만 것이므로 이어서 진행.
+      # develop 과 다르면 QA 가 진행 중이거나 develop 이 바뀐 것이므로 중단
+      - name: Check existing branch
+        id: branch
         run: |
-          if git ls-remote --exit-code --heads origin "release-$VERSION" >/dev/null; then
-            echo "::error::release-$VERSION 브랜치가 이미 있습니다"; exit 1
+          EXISTING=$(git ls-remote --heads origin "release-$VERSION" | cut -f1)
+          if [ -z "$EXISTING" ]; then
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          elif [ "$EXISTING" = "$(git rev-parse HEAD)" ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "release-$VERSION 이 develop 과 같은 커밋 → 생성을 건너뛰고 이어서 진행"
+          else
+            echo "::error::release-$VERSION 브랜치가 이미 있고 develop 과 다릅니다 (QA 진행 중이거나 develop 이 바뀜). 재개하려면 브랜치를 지우고 다시 실행"
+            exit 1
           fi
 
       - name: Create release-x.y.z from develop
+        if: steps.branch.outputs.exists == 'false'
         run: git push origin "HEAD:refs/heads/release-$VERSION"
 
       - name: Merge into release
@@ -45,8 +56,12 @@ jobs:
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -B release origin/release
-          git merge --no-ff -m "Merge release-$VERSION into release" "origin/develop"
-          git push origin release
+          if git merge-base --is-ancestor origin/develop release; then
+            echo "release 에 develop 이 이미 머지되어 있음 → 건너뜀"
+          else
+            git merge --no-ff -m "Merge release-$VERSION into release" origin/develop
+            git push origin release
+          fi
 
       - name: Trigger Deploy
         run: gh workflow run deploy.yml --ref release -f lane=both -f version="$VERSION"

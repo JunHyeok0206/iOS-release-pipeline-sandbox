@@ -207,7 +207,9 @@ Info.plist 안에 있으면 QA 수정이 바로 옆 줄을 고쳤을 때 충돌�
 
 | 증상 | 원인 / 조치 |
 |---|---|
-| `release-x.y.z 브랜치가 이미 있습니다` | 같은 버전을 두 번 시작. 브랜치를 지우고 다시 하거나 버전을 바꾼다 |
+| `Release Start` 가 중간에 실패 | 그대로 Re-run. 브랜치가 develop 과 같은 커밋이면 생성을 건너뛰고 머지·Deploy 호출을 이어서 한다 |
+| `release-x.y.z 브랜치가 이미 있고 develop 과 다릅니다` | 그 버전의 QA 가 진행 중이거나 develop 이 바뀌었다. 재개가 목적이면 브랜치를 지우고 다시 실행, 아니면 버전을 바꾼다 |
+| `Deploy` 의 build 가 실패 | **Re-run failed jobs** 를 쓴다 (bump 는 다시 돌지 않음). Re-run all jobs 를 눌러도 bump 는 이전 attempt 의 커밋을 재사용하므로 번호가 또 오르지 않는다 |
 | `gh run watch` 가 run ID 를 요구 | `make watch workflow=…` 를 쓴다 (최신 run 을 찾아 준다) |
 | PR 에 `Config/Version.xcconfig` 충돌 | 누군가 `release-x.y.z` 나 develop 에서 버전을 바꿨다. 해당 커밋에서 그 파일 변경만 되돌린다 |
 | bump 커밋 push 가 거부됨 | `release` 에 보호 규칙(PR 필수)이 걸려 있다. 이 모델에서는 삭제·force-push 차단만 건다 |

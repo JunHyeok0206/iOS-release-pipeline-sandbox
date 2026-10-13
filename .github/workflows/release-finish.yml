@@ -53,9 +53,9 @@ jobs:
             [ -n "$NOTES" ] && printf '%s\n' "$NOTES"
           } > /tmp/release-notes.md
           if [ -n "$NOTES" ]; then
-            gh release create "$VERSION" -R "$GITHUB_REPOSITORY" --target master --title "$VERSION" --notes-file /tmp/release-notes.md
+            gh release create "$VERSION" -R "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "$VERSION" --notes-file /tmp/release-notes.md
           else
-            gh release create "$VERSION" -R "$GITHUB_REPOSITORY" --target master --title "$VERSION" --notes-file /tmp/release-notes.md --generate-notes
+            gh release create "$VERSION" -R "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "$VERSION" --notes-file /tmp/release-notes.md --generate-notes
           fi
 
       - name: Delete release-x.y.z

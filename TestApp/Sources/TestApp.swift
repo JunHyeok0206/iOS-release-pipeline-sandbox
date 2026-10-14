@@ -1,6 +1,7 @@
 import SwiftUI
 import Alamofire
 import Kingfisher
+import Lottie
 import RxSwift
 import SnapKit
 import Toast_Swift
@@ -19,7 +20,7 @@ struct TestApp: App {
 
     // SPM(Alamofire·Kingfisher·RxSwift·SnapKit)·CocoaPods(Toast-Swift) 가 실제로 링크되는지 확인용
     private var dependencyNames: String {
-        [Session.self, KingfisherManager.self, DisposeBag.self, ConstraintMaker.self, ToastManager.self]
+        [Session.self, KingfisherManager.self, DisposeBag.self, ConstraintMaker.self, ToastManager.self, LottieAnimationView.self]
             .map { String(describing: $0) }.joined(separator: " ")
     }
 

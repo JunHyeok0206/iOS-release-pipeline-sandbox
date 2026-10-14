@@ -17,5 +17,8 @@ let package = Package(
         .package(url: "https://github.com/onevcat/Kingfisher", exact: "7.11.0"),
         // 바이너리 아티팩트(GitHub release asset 55MB). Timespread 6.0.5 첫 Deploy 가 이 다운로드에서 멈춘 원인 재현용
         .package(url: "https://github.com/airbnb/lottie-spm", exact: "4.4.3"),
+        // 바이너리 아티팩트 17개 병렬 다운로드 재현용 (Timespread 6.0.5 첫 Deploy 가 여기서 64분간 0바이트 수신). 타겟에는 연결하지 않고 resolve 만 시킨다
+        .package(url: "https://github.com/firebase/firebase-ios-sdk", exact: "10.24.0"),
+        .package(url: "https://github.com/facebook/facebook-ios-sdk", exact: "17.0.1"),
     ]
 )

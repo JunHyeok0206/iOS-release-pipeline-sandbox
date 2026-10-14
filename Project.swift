@@ -20,7 +20,13 @@ let project = Project(
             deploymentTargets: .iOS("17.0"),
             infoPlist: .file(path: "TestApp/Resources/Info.plist"),
             sources: ["TestApp/Sources/**"],
-            dependencies: [.target(name: "TestWidget")]
+            dependencies: [
+                .target(name: "TestWidget"),
+                .external(name: "Alamofire"),
+                .external(name: "SnapKit"),
+                .external(name: "RxSwift"),
+                .external(name: "Kingfisher")
+            ]
         ),
         .target(
             name: "TestWidget",

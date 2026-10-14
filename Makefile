@@ -4,7 +4,9 @@ VERSION_XCCONFIG := Config/Version.xcconfig
 
 generate:
 	mise install
+	mise x -- tuist install
 	mise x -- tuist generate
+	bundle exec pod install
 
 # 릴리스 시작: develop 에서 release-x.y.z 생성 + x.y.z (0) 커밋
 release-start:

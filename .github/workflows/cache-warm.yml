@@ -1,0 +1,138 @@
+# Deploy 의 의존성 캐시(deploy.yml 의 Restore/Save 와 같은 키)를 미리 만들고 살려 둔다.
+#
+# 캐시는 "만든 브랜치 + 기본 브랜치" 에서만 보이므로 Deploy 가 도는 release 브랜치 범위에 만들어야 한다.
+# develop push(잠금 파일 변경) 와 cron 은 release 가 아닌 ref 에서 뜨므로, relay job 이 자기 자신을 --ref release 로 dispatch 하고
+# release ref 로 뜬 run 이 실제 작업을 한다.
+#   warm      : develop 의 잠금 파일 커밋을 체크아웃해 설치 → 새 키로 저장 (macos). 다음 사이클 첫 Deploy 가 바로 히트
+#   keepalive : 최신 캐시를 복원만 해서 "7일 미접근 삭제" 를 피한다 (ubuntu, 1~2분)
+# 이 파일은 기본 브랜치(dispatch 등록)와 release(실행 ref)에 모두 있어야 한다. 첫 사이클을 거치면 충족된다.
+name: Cache Warm
+run-name: >-
+  ${{ github.event_name == 'workflow_dispatch'
+      && format('Cache Warm {0} @{1}', inputs.mode, inputs.sha)
+      || format('Cache Warm relay: {0}', github.event_name) }}
+
+on:
+  push:
+    branches: [develop]
+    paths:
+      - Tuist/Package.resolved
+      - Podfile.lock
+      - .mise.toml
+  schedule:
+    - cron: '0 18 * * 0,3'   # 일·수 03:00 KST. 간격 3~4일 (7일 미접근 삭제보다 짧게)
+  workflow_dispatch:
+    inputs:
+      mode:
+        type: choice
+        options: [warm, keepalive]
+        default: warm
+      sha:
+        description: '체크아웃할 커밋 (warm). 비우면 ref 의 HEAD'
+        type: string
+        required: false
+
+permissions:
+  contents: read
+  actions: write   # relay 의 self-dispatch
+
+concurrency:
+  group: cache-warm-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # release 가 아닌 ref(develop push, main 의 cron)에서 뜬 run: release ref 로 다시 띄운다
+  relay:
+    if: github.ref != 'refs/heads/release'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+      MODE: ${{ github.event_name == 'schedule' && 'keepalive' || 'warm' }}
+    steps:
+      - run: |
+          echo "dispatch cache-warm.yml --ref release mode=$MODE sha=${GITHUB_SHA}"
+          gh workflow run cache-warm.yml -R "$GITHUB_REPOSITORY" --ref release -f mode="$MODE" -f sha="$GITHUB_SHA"
+
+  keepalive:
+    if: github.ref == 'refs/heads/release' && inputs.mode == 'keepalive'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      # 키 접두사만 주면 가장 최근 캐시를 복원한다. 복원 = 접근이라 수명이 연장된다. 러너 OS 가 달라도 tar 복원에는 문제 없다
+      - uses: actions/cache/restore@v4
+        with:
+          path: Tuist/.build
+          key: keepalive-spm-${{ github.run_id }}
+          restore-keys: spm-macOS-
+      - uses: actions/cache/restore@v4
+        with:
+          path: Pods
+          key: keepalive-pods-${{ github.run_id }}
+          restore-keys: pods-macOS-
+
+  warm:
+    if: github.ref == 'refs/heads/release' && inputs.mode == 'warm'
+    runs-on: macos-26
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.sha || github.sha }}   # develop 의 잠금 파일 커밋. 캐시 범위는 run 의 ref(release)
+          persist-credentials: false
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.4'
+          bundler-cache: true
+
+      - uses: jdx/mise-action@v5
+
+      # 키는 deploy.yml 과 같아야 한다
+      - name: Restore SPM cache
+        id: spm-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: Tuist/.build
+          key: spm-${{ runner.os }}-${{ hashFiles('Tuist/Package.resolved', '.mise.toml') }}
+          restore-keys: spm-${{ runner.os }}-
+
+      - name: Restore Pods cache
+        id: pods-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: Pods
+          key: pods-${{ runner.os }}-${{ hashFiles('Podfile.lock') }}
+          restore-keys: pods-${{ runner.os }}-
+
+      - name: Tuist install / generate
+        if: steps.spm-cache.outputs.cache-hit != 'true' || steps.pods-cache.outputs.cache-hit != 'true'
+        run: |
+          mise x -- tuist install
+          mise x -- tuist generate --no-open
+
+      - name: Pod install
+        if: steps.pods-cache.outputs.cache-hit != 'true'
+        run: bundle exec pod install
+
+      - name: Save SPM cache
+        if: steps.spm-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: Tuist/.build
+          key: ${{ steps.spm-cache.outputs.cache-primary-key }}
+
+      - name: Save Pods cache
+        if: steps.pods-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: Pods
+          key: ${{ steps.pods-cache.outputs.cache-primary-key }}
+
+      - name: Summary
+        run: |
+          {
+            echo "### Cache Warm @${{ inputs.sha || github.sha }}"
+            echo "- SPM: ${{ steps.spm-cache.outputs.cache-hit == 'true' && '이미 있음' || '저장' }} (\`${{ steps.spm-cache.outputs.cache-primary-key }}\`)"
+            echo "- Pods: ${{ steps.pods-cache.outputs.cache-hit == 'true' && '이미 있음' || '저장' }} (\`${{ steps.pods-cache.outputs.cache-primary-key }}\`)"
+          } >> "$GITHUB_STEP_SUMMARY"

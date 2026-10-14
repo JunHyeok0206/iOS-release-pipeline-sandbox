@@ -8,6 +8,7 @@
 | 경로 | 역할 |
 |---|---|
 | `Project.swift` | Tuist 4.12.1. 앱 `TestApp` + 위젯 `TestWidget` |
+| `Tuist/Package.swift`, `Podfile` | SPM 4개(Alamofire·SnapKit·RxSwift·Kingfisher) + CocoaPods 1개(Toast-Swift). Deploy 의 의존성 캐시(5절) 검증용으로 Timespread 와 같은 구조 |
 | `Config/Version.xcconfig` | `MARKETING_VERSION` / `CURRENT_PROJECT_VERSION`. 두 Info.plist 가 `$(…)` 로 참조. **CI 만 수정** |
 | `fastlane/Fastfile` | `bump`, `firebase`(stub), `test_flight`(stub) |
 | `Makefile` | 아래 명령어 표 |
@@ -17,6 +18,7 @@
 | `scripts/pr-body.sh` | Makefile 이 여는 PR 의 제목·본문 생성 (5절 "PR 제목·본문") |
 | `.github/workflows/release-start.yml` | 릴리스 시작 (3절) |
 | `.github/workflows/deploy.yml` | 배포 (5절) |
+| `.github/workflows/cache-warm.yml` | Deploy 의존성 캐시를 미리 만들고(warm) 살려 둠(keep-alive) (5절) |
 
 ## 2. 브랜치와 흐름
 
@@ -126,14 +128,40 @@ master(태그)에서 `release-x.y.z` 를 분기하는 것만 다르고 나머지
 | job | 러너 | 내용 |
 |---|---|---|
 | `bump` | ubuntu | `release` 가 아니면 중단. 버전 결정(아래) → `Config/Version.xcconfig` 수정 → `release` 에 push |
-| `build firebase · x.y.z (n)` | macos-26 | bump 커밋 체크아웃 → Xcode 26.6 → Tuist generate → `fastlane ios firebase` |
+| `build firebase · x.y.z (n)` | macos-26 | bump 커밋 체크아웃 → Xcode 26.6 → 캐시 복원 → `tuist install` / `generate` → `pod install` → 캐시 저장 → `fastlane ios firebase` |
 | `build test_flight · x.y.z (n)` | macos-26 | 위와 같고 `fastlane ios test_flight` |
 
 버전 결정 규칙:
 1. dispatch 입력 `version` 이 있으면 그 값
-2. 없으면 HEAD 커밋 메시지에서 `release-x.y.z` 를 찾는다 (PR 머지 커밋에는 head 브랜치 이름이 들어 있다)
+2. 없으면 push 이벤트 커밋 메시지에서 `release-x.y.z` 를 찾는다 (PR 머지 커밋에는 head 브랜치 이름이 들어 있다)
 3. 둘 다 없으면 현재 값 유지
 4. 결정된 값이 현재 `MARKETING_VERSION` 과 **다르면** `x.y.z (1)`, **같으면** 빌드 번호 +1
+
+의존성 캐시 (`actions/cache/restore` · `save`):
+
+| 캐시 | 경로 | 키 |
+|---|---|---|
+| SPM | `Tuist/.build` | `spm-<os>-` + `hashFiles(Tuist/Package.resolved, .mise.toml)` |
+| Pods | `Pods` | `pods-<os>-` + `hashFiles(Podfile.lock)` |
+
+- 두 build job 이 각각 복원한다. 히트하면 `tuist install`·`pod install` 은 네트워크 없이 끝나 중복 설치 시간이 사라진다
+- 정확한 키가 없으면 `restore-keys` 로 가장 최근 캐시를 부분 복원한 뒤 설치하고, 새 키로 저장한다. 히트했으면 저장하지 않는다. 두 job 이 같은 키를 동시에 저장하려 하면 뒤쪽은 "already exists" 경고만 나고 넘어간다
+- **삭제 시점**: 마지막 접근 후 7일 미사용, 또는 리포 캐시 합계가 10GB 를 넘어 오래된 것부터 밀려날 때 GitHub 가 자동 삭제한다. 릴리스 간격이 일주일을 넘으면 다음 사이클 첫 Deploy 는 캐시 없이 설치한다. 수동 삭제는 Settings → Actions → Caches 또는 `gh cache delete`
+- 캐시는 생성 브랜치와 기본 브랜치에서만 보인다. Deploy 는 항상 `release` 에서 돌므로 `release` 끼리 공유된다
+
+### Cache Warm (`cache-warm.yml`)
+
+캐시는 생성 브랜치에서만 보이므로 `release` 범위에 미리 만들어 두어야 사이클 첫 Deploy 부터 히트한다. 두 트리거 모두 `release` 가 아닌 ref 에서 뜨기 때문에 `relay` job 이 자기 자신을 `--ref release` 로 dispatch 하고, `release` ref 의 run 이 실제 작업을 한다.
+
+| 트리거 | relay → release 에서 하는 일 | 러너 |
+|---|---|---|
+| develop push 중 `Tuist/Package.resolved`·`Podfile.lock`·`.mise.toml` 변경 | **warm**: 그 커밋을 체크아웃해 `restore-keys` 부분 복원 → 설치 → 새 키로 저장 | macos-26 |
+| cron 일·수 03:00 KST | **keep-alive**: 키 접두사로 최신 캐시를 복원만 한다(접근 = 수명 연장). 2주 사이클 사이의 7일 삭제를 막는다 | ubuntu |
+| 수동 `gh workflow run cache-warm.yml --ref release -f mode=…` | 위 둘 중 하나 | |
+
+- 이 파일은 **기본 브랜치(dispatch 등록)와 `release`(실행 ref) 양쪽**에 있어야 동작한다. 첫 사이클을 거치면 충족된다
+- Deploy 의 Restore/Save 는 그대로 둔다. warm 이 없었거나 삭제된 경우의 안전망
+- 의존성이 바뀌어도 배포는 막히지 않는다. warm 이 먼저 돌지 않았으면 Deploy 가 미스로 설치하고 저장할 뿐이다
 
 bump 커밋은 GITHUB_TOKEN 으로 push 되므로 Deploy 가 다시 돌지 않는다. `concurrency` 로 같은 브랜치의 이전 run 은 취소된다. bump job 은 10초대에 끝나므로 취소는 대개 build job 에서 일어나고, 그때 이미 push 된 빌드 번호는 비게 된다 (단조 증가만 유지되면 문제 없음).
 
@@ -181,7 +209,9 @@ Makefile 이 여는 PR 세 종류는 사람이 쓰지 않고 스크립트가 git
 6. `make release-start version=1.0.2` → 충돌 없이 `release` 에 머지되고 Deploy 가 `1.0.2 (1)`
 7. 충돌 내성 확인: `release-1.0.2` 에서 `TestApp/Resources/Info.plist` 의 아무 키나 수정해 push → `make qa-deploy` 가 충돌 없이 머지됨 (버전이 xcconfig 로 분리됐기 때문)
 8. 실패 재현: `release-1.0.2` 에서 로컬로 `bundle exec fastlane ios bump` 후 push → PR 에 `Config/Version.xcconfig` 충돌 표시 (규칙 위반 케이스)
-9. PR 본문 확인: 6~8 과정에서 열린 `deploy: release-1.0.2 (n건)` PR 과 `release: 1.0.2 master에 반영` / `develop에 반영` PR 의 본문이 5절 "PR 제목·본문" 대로 채워졌는지. `make release-finish … thread=<url>` 을 주면 요약에 관련 스레드가 들어간다
+9. 캐시 확인: 의존성을 처음 넣은 Deploy 에서 두 build job 의 `Restore SPM cache` 가 "Cache not found", `Save SPM cache` 가 저장(한쪽은 already exists 경고 가능). 다음 `make deploy` 에서 `Cache restored from key: spm-…`, `Save` step 은 skipped, `Tuist install / generate`·`Pod install` 이 수 초. `Tuist/Package.swift` 의 버전을 바꿔 push 하면 `Package.resolved` 해시가 바뀌어 restore-keys 부분 복원 후 새 키로 저장
+10. Cache Warm 확인: (a) `gh workflow run cache-warm.yml -R … --ref master -f mode=keepalive` → relay 가 `release` 로 dispatch, keepalive job 에 `Cache restored from key: spm-macOS-…`. (b) develop 에서 `Tuist/Package.swift` 의 버전을 바꿔 PR 머지 → push 가 relay 를 띄우고 `release` 의 warm job 이 새 키로 저장 → 다음 `make release-start` 의 Deploy 에서 두 build job 모두 Restore 가 즉시 히트
+11. PR 본문 확인: 6~8 과정에서 열린 `deploy: release-1.0.2 (n건)` PR 과 `release: 1.0.2 master에 반영` / `develop에 반영` PR 의 본문이 5절 "PR 제목·본문" 대로 채워졌는지. `make release-finish … thread=<url>` 을 주면 요약에 관련 스레드가 들어간다
 
 ## 8. 자주 묻는 것
 
@@ -217,17 +247,21 @@ Info.plist 안에 있으면 QA 수정이 바로 옆 줄을 고쳤을 때 충돌�
 | Actions 목록에서 run 을 구분하기 어려움 | run 이름에 입력값이 들어간다: `Release Start 1.0.3`, `Deploy both 1.0.3`(dispatch), `Deploy push: <커밋 제목>`(push). 빌드 번호는 run 생성 뒤 bump 가 정하므로 이름에 넣을 수 없다 |
 | 어떤 빌드 번호가 배포됐는지 보고 싶음 | run 상세의 job 이름(`build firebase · 1.0.3 (2)`)과 Summary(`Deploy iOS 1.0.3 (2)`)에 나온다. run 이름에는 넣을 수 없다 |
 | `make release-start` 가 `No rule to make target` | 다른 디렉터리다. 레포 루트에서 실행 |
+| `make qa-deploy` 가 "문서만 변경되어 Deploy 는 실행되지 않습니다" | `.md`·`docs/` 만 바뀐 push 는 `paths-ignore` 로 배포하지 않는다. 빌드가 필요하면 `make deploy` |
+| `make watch` 가 "이후 생성된 run 이 없습니다" | dispatch·머지 뒤 30초 안에 run 이 생기지 않았다. Actions 탭에서 확인하고 `gh run watch <id>` |
 | `Release Finish` 가 실패 | Actions 에서 Re-run. Release 가 이미 있으면 생성은 건너뛰고 브랜치 삭제만 다시 한다 |
 | `Release Finish` 가 돌았는데 Release 가 없음 | master 의 `Version.xcconfig` 버전과 같은 태그가 이미 있었다. 버전이 올라가지 않은 채 머지된 경우다 |
 | `release` 브랜치가 사라짐 | `release → master` PR 머지 후 Delete branch 를 눌렀다. `git push origin origin/master:refs/heads/release` 로 복구한다 (master 가 직전 release 와 같은 내용). 다음 `release-start` 는 그대로 동작 |
+| `Restore … cache` 가 매번 "Cache not found" | 7일 미사용·10GB 초과로 삭제됐거나(정상, 한 번 설치하면 다시 저장) 잠금 파일이 커밋되지 않았다(`Tuist/Package.resolved`, `Podfile.lock` 은 커밋 대상) |
+| `Save … cache` 가 "already exists" 경고 | 다른 build job 이 먼저 저장했다. 정상 |
 | `gh pr merge` 가 "no pull requests found" (`qa-deploy`) | 같은 head 로 열린 PR 이 없다. `make qa-deploy` 를 다시 실행하면 PR 생성부터 한다 |
 
 ## 10. 로컬
 
 ```bash
 mise install
-mise x -- tuist generate
 bundle install
+make generate          # tuist install → tuist generate → pod install
 bundle exec fastlane ios bump version:1.0.0 build:0   # 동작 확인용. 결과 커밋은 push 하지 않는다 (Version.xcconfig 는 CI 만 수정)
 ```
 

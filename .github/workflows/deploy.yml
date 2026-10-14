@@ -154,8 +154,46 @@ jobs:
 
       - uses: jdx/mise-action@v5
 
-      - name: Tuist generate
-        run: mise x -- tuist generate --no-open
+      # 의존성 캐시. 키 = 잠금 파일 해시. 히트하면 install 이 네트워크 없이 끝나 두 build job 의 중복 설치 시간이 사라진다.
+      # restore-keys 로 가장 가까운 옛 캐시를 부분 복원하고, 정확히 맞는 키가 없을 때만 저장한다 (두 job 이 같은 키를 동시에 저장하면 뒤쪽은 경고만 나고 넘어감).
+      # 삭제: 7일 미사용 또는 리포 합계 10GB 초과 시 GitHub 가 자동 삭제. 수동은 Settings → Actions → Caches
+      - name: Restore SPM cache
+        id: spm-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: Tuist/.build
+          key: spm-${{ runner.os }}-${{ hashFiles('Tuist/Package.resolved', '.mise.toml') }}
+          restore-keys: spm-${{ runner.os }}-
+
+      - name: Restore Pods cache
+        id: pods-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: Pods
+          key: pods-${{ runner.os }}-${{ hashFiles('Podfile.lock') }}
+          restore-keys: pods-${{ runner.os }}-
+
+      - name: Tuist install / generate
+        run: |
+          mise x -- tuist install
+          mise x -- tuist generate --no-open
+
+      - name: Pod install
+        run: bundle exec pod install
+
+      - name: Save SPM cache
+        if: steps.spm-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: Tuist/.build
+          key: ${{ steps.spm-cache.outputs.cache-primary-key }}
+
+      - name: Save Pods cache
+        if: steps.pods-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: Pods
+          key: ${{ steps.pods-cache.outputs.cache-primary-key }}
 
       - name: fastlane ios ${{ matrix.lane }}
         run: bundle exec fastlane ios "${{ matrix.lane }}"

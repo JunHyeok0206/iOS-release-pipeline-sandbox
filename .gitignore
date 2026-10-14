@@ -13,3 +13,5 @@ fastlane/README.md
 vendor/
 build/
 fastlane/.env
+Pods/
+Tuist/.build/

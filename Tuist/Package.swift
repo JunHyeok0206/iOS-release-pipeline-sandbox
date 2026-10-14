@@ -15,5 +15,7 @@ let package = Package(
         .package(url: "https://github.com/SnapKit/SnapKit", exact: "5.7.1"),
         .package(url: "https://github.com/ReactiveX/RxSwift", exact: "6.8.0"),
         .package(url: "https://github.com/onevcat/Kingfisher", exact: "7.11.0"),
+        // 바이너리 아티팩트(GitHub release asset 55MB). Timespread 6.0.5 첫 Deploy 가 이 다운로드에서 멈춘 원인 재현용
+        .package(url: "https://github.com/airbnb/lottie-spm", exact: "4.4.3"),
     ]
 )

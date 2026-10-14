@@ -173,7 +173,9 @@ jobs:
           key: pods-${{ runner.os }}-${{ hashFiles('Podfile.lock') }}
           restore-keys: pods-${{ runner.os }}-
 
+      # SPM 의 바이너리 아티팩트 다운로드에는 타임아웃이 없어 일시적 네트워크 정지가 영구 hang 이 된다 (Timespread 6.0.5 첫 Deploy, 64분). 빨리 실패시키고 Re-run 한다
       - name: Tuist install / generate
+        timeout-minutes: 20
         run: |
           mise x -- tuist install
           mise x -- tuist generate --no-open

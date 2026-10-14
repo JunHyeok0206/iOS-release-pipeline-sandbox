@@ -256,6 +256,7 @@ Info.plist 안에 있으면 QA 수정이 바로 옆 줄을 고쳤을 때 충돌�
 | `Release Finish` 가 실패 | Actions 에서 Re-run. Release 가 이미 있으면 생성은 건너뛰고 브랜치 삭제만 다시 한다 |
 | `Release Finish` 가 돌았는데 Release 가 없음 | master 의 `Version.xcconfig` 버전과 같은 태그가 이미 있었다. 버전이 올라가지 않은 채 머지된 경우다 |
 | `release` 브랜치가 사라짐 | `release → master` PR 머지 후 Delete branch 를 눌렀다. `git push origin origin/master:refs/heads/release` 로 복구한다 (master 가 직전 release 와 같은 내용). 다음 `release-start` 는 그대로 동작 |
+| `Tuist install / generate` 가 `Downloading binary artifact …` 에서 진행 없이 멈춤 (`[n/m]` progress 라인 없음) | SPM 아티팩트 다운로드에 타임아웃이 없어 일시적 네트워크 정지가 영구 hang 이 된다. 2026-10-14 Timespread 6.0.5 첫 Deploy 에서 두 job 모두 17개 아티팩트가 64분간 0바이트. 같은 조합을 샌드박스에서 재현하면 19초에 끝나므로 패키지·러너 문제가 아니다. step 에 `timeout-minutes: 20` 을 둬 빨리 실패시키고 **Re-run failed jobs** |
 | `Restore … cache` 가 매번 "Cache not found" | 7일 미사용·10GB 초과로 삭제됐거나(정상, 한 번 설치하면 다시 저장) 잠금 파일이 커밋되지 않았다(`Tuist/Package.resolved`, `Podfile.lock` 은 커밋 대상) |
 | `Save … cache` 가 "already exists" 경고 | 다른 build job 이 먼저 저장했다. 정상 |
 | `gh pr merge` 가 "no pull requests found" (`qa-deploy`) | 같은 head 로 열린 PR 이 없다. `make qa-deploy` 를 다시 실행하면 PR 생성부터 한다 |

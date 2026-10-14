@@ -42,6 +42,13 @@ jobs:
           echo "::error::release 브랜치에서만 실행할 수 있습니다 (현재: ${{ github.ref }})"
           exit 1
 
+      - name: Validate version input
+        if: ${{ github.event.inputs.version != '' }}
+        env:
+          VERSION: ${{ github.event.inputs.version }}
+        run: |
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::version 은 x.y.z 형식이어야 합니다 (입력: '$VERSION')"; exit 1; }
+
       # 이벤트 SHA 가 아니라 release 의 현재 tip 을 받는다. 재실행이나 연속 deploy 로 tip 이 앞서 있어도 push 가 non-fast-forward 로 거절되지 않도록
       - uses: actions/checkout@v5
         with:

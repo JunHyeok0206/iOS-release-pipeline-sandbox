@@ -9,8 +9,9 @@ generate:
 # 릴리스 시작: develop 에서 release-x.y.z 생성 + x.y.z (0) 커밋
 release-start:
 	@test -n "$(version)" || { echo "usage: make release-start version=x.y.z"; exit 1; }
-	gh workflow run "Release Start" -R $(REPO) -f version=$(version)
-	$(MAKE) watch workflow="Release Start"
+	@SINCE=$$(date -u -v-60S +%Y-%m-%dT%H:%M:%SZ); \
+	gh workflow run "Release Start" -R $(REPO) -f version=$(version) && \
+	$(MAKE) watch workflow="Release Start" since=$$SINCE
 
 # QA 배포: release-x.y.z → release PR 머지 (merge commit) → Deploy (Firebase + TestFlight). PR 제목·본문은 scripts/pr-body.sh
 qa-deploy: branch ?= $(shell git branch --show-current)
@@ -22,14 +23,21 @@ qa-deploy:
 			--title "$$(REPO=$(REPO) VERSION_XCCONFIG=$(VERSION_XCCONFIG) scripts/pr-body.sh title qa $(branch))" \
 			--body "$$(REPO=$(REPO) VERSION_XCCONFIG=$(VERSION_XCCONFIG) scripts/pr-body.sh body qa $(branch))"); \
 	fi; \
-	echo "$$URL"; gh pr merge -R $(REPO) "$$URL" --merge
-	$(MAKE) watch workflow=Deploy
+	echo "$$URL"; \
+	SINCE=$$(date -u -v-60S +%Y-%m-%dT%H:%M:%SZ); \
+	gh pr merge -R $(REPO) "$$URL" --merge || exit 1; \
+	if gh pr view -R $(REPO) "$$URL" --json files -q '.files[].path' | grep -qvE '^docs/|\.md$$'; then \
+		$(MAKE) watch workflow=Deploy since=$$SINCE; \
+	else \
+		echo "문서(.md, docs/)만 변경되어 Deploy 는 실행되지 않습니다 (paths-ignore). 빌드가 필요하면 make deploy"; \
+	fi
 
 # 수동 배포 (release 브랜치, both | firebase | test_flight)
 deploy: lane ?= both
 deploy:
-	gh workflow run Deploy -R $(REPO) --ref release -f lane=$(lane)
-	$(MAKE) watch workflow=Deploy
+	@SINCE=$$(date -u -v-60S +%Y-%m-%dT%H:%M:%SZ); \
+	gh workflow run Deploy -R $(REPO) --ref release -f lane=$(lane) && \
+	$(MAKE) watch workflow=Deploy since=$$SINCE
 
 deploy-firebase:
 	$(MAKE) deploy lane=firebase
@@ -69,7 +77,13 @@ release-finish:
 runs:
 	gh run list -R $(REPO) --limit 10
 
+# workflow= 의 run 을 watch. since=<UTC, 2026-01-01T00:00:00Z> 를 주면 그 이후 생성된 run 만 찾는다 (최대 30초 대기). 내부용
+watch: since ?=
 watch:
-	@sleep 5
-	@gh run watch -R $(REPO) --exit-status --compact \
-		$$(gh run list -R $(REPO) --workflow "$(workflow)" --limit 1 --json databaseId -q '.[0].databaseId')
+	@for i in 1 2 3 4 5 6; do \
+		sleep 5; \
+		ID=$$(gh run list -R $(REPO) --workflow "$(workflow)" --limit 1 $(if $(since),--created ">=$(since)") --json databaseId -q '.[0].databaseId'); \
+		[ -n "$$ID" ] && break; \
+	done; \
+	[ -n "$$ID" ] || { echo "$(workflow): $(if $(since),$(since) 이후 생성된 run 이 없습니다,run 이 없습니다)" >&2; exit 1; }; \
+	gh run watch -R $(REPO) --exit-status --compact "$$ID"

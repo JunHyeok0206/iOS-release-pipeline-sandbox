@@ -217,6 +217,8 @@ Info.plist 안에 있으면 QA 수정이 바로 옆 줄을 고쳤을 때 충돌�
 | Actions 목록에서 run 을 구분하기 어려움 | run 이름에 입력값이 들어간다: `Release Start 1.0.3`, `Deploy both 1.0.3`(dispatch), `Deploy push: <커밋 제목>`(push). 빌드 번호는 run 생성 뒤 bump 가 정하므로 이름에 넣을 수 없다 |
 | 어떤 빌드 번호가 배포됐는지 보고 싶음 | run 상세의 job 이름(`build firebase · 1.0.3 (2)`)과 Summary(`Deploy iOS 1.0.3 (2)`)에 나온다. run 이름에는 넣을 수 없다 |
 | `make release-start` 가 `No rule to make target` | 다른 디렉터리다. 레포 루트에서 실행 |
+| `make qa-deploy` 가 "문서만 변경되어 Deploy 는 실행되지 않습니다" | `.md`·`docs/` 만 바뀐 push 는 `paths-ignore` 로 배포하지 않는다. 빌드가 필요하면 `make deploy` |
+| `make watch` 가 "이후 생성된 run 이 없습니다" | dispatch·머지 뒤 30초 안에 run 이 생기지 않았다. Actions 탭에서 확인하고 `gh run watch <id>` |
 | `Release Finish` 가 실패 | Actions 에서 Re-run. Release 가 이미 있으면 생성은 건너뛰고 브랜치 삭제만 다시 한다 |
 | `Release Finish` 가 돌았는데 Release 가 없음 | master 의 `Version.xcconfig` 버전과 같은 태그가 이미 있었다. 버전이 올라가지 않은 채 머지된 경우다 |
 | `release` 브랜치가 사라짐 | `release → master` PR 머지 후 Delete branch 를 눌렀다. `git push origin origin/master:refs/heads/release` 로 복구한다 (master 가 직전 release 와 같은 내용). 다음 `release-start` 는 그대로 동작 |

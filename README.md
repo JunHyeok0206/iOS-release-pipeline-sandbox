@@ -210,7 +210,11 @@ Makefile 이 여는 PR 세 종류는 사람이 쓰지 않고 스크립트가 git
 7. 충돌 내성 확인: `release-1.0.2` 에서 `TestApp/Resources/Info.plist` 의 아무 키나 수정해 push → `make qa-deploy` 가 충돌 없이 머지됨 (버전이 xcconfig 로 분리됐기 때문)
 8. 실패 재현: `release-1.0.2` 에서 로컬로 `bundle exec fastlane ios bump` 후 push → PR 에 `Config/Version.xcconfig` 충돌 표시 (규칙 위반 케이스)
 9. 캐시 확인: 의존성을 처음 넣은 Deploy 에서 두 build job 의 `Restore SPM cache` 가 "Cache not found", `Save SPM cache` 가 저장(한쪽은 already exists 경고 가능). 다음 `make deploy` 에서 `Cache restored from key: spm-…`, `Save` step 은 skipped, `Tuist install / generate`·`Pod install` 이 수 초. `Tuist/Package.swift` 의 버전을 바꿔 push 하면 `Package.resolved` 해시가 바뀌어 restore-keys 부분 복원 후 새 키로 저장
-10. Cache Warm 확인: (a) `gh workflow run cache-warm.yml -R … --ref master -f mode=keepalive` → relay 가 `release` 로 dispatch, keepalive job 에 `Cache restored from key: spm-macOS-…`. (b) develop 에서 `Tuist/Package.swift` 의 버전을 바꿔 PR 머지 → push 가 relay 를 띄우고 `release` 의 warm job 이 새 키로 저장 → 다음 `make release-start` 의 Deploy 에서 두 build job 모두 Restore 가 즉시 히트
+10. Cache Warm 확인 (2026-10-14 실측):
+   - (a) `gh workflow run cache-warm.yml --ref release -f mode=keepalive` → keepalive job 이 `spm-macOS-…`, `pods-macOS-…` 최신 키 2개 복원 (ubuntu, 20초)
+   - (b) develop 에 `lottie-spm 4.4.3` 추가 PR 머지 → push 가 relay(develop) 를 띄우고 `release` 에서 `warm @<develop sha>` 실행. 직전 캐시 부분 복원 → `tuist install` 48초(Lottie 바이너리 55MB 다운로드 4.4초 포함) → 새 키로 저장. Pods 는 히트라 skipped
+   - (c) 잠금 파일이 같은 warm 은 Restore 히트 → 설치·저장 모두 skipped (약 40초)
+   - 원래 (a)를 master 에서 dispatch 했을 때 relay 가 `mode` 입력을 무시하고 warm 으로 넘기는 버그가 있어 수정함
 11. PR 본문 확인: 6~8 과정에서 열린 `deploy: release-1.0.2 (n건)` PR 과 `release: 1.0.2 master에 반영` / `develop에 반영` PR 의 본문이 5절 "PR 제목·본문" 대로 채워졌는지. `make release-finish … thread=<url>` 을 주면 요약에 관련 스레드가 들어간다
 
 ## 8. 자주 묻는 것

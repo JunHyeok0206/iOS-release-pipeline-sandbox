@@ -48,7 +48,8 @@ jobs:
     timeout-minutes: 5
     env:
       GH_TOKEN: ${{ github.token }}
-      MODE: ${{ github.event_name == 'schedule' && 'keepalive' || 'warm' }}
+      # cron → keepalive, develop push → warm, 수동 dispatch → 입력값 그대로
+      MODE: ${{ github.event_name == 'schedule' && 'keepalive' || (inputs.mode || 'warm') }}
     steps:
       - run: |
           echo "dispatch cache-warm.yml --ref release mode=$MODE sha=${GITHUB_SHA}"

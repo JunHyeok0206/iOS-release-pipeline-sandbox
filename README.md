@@ -141,7 +141,7 @@ master(태그)에서 `release-x.y.z` 를 분기하는 것만 다르고 나머지
 
 | 캐시 | 경로 | 키 |
 |---|---|---|
-| SPM | `Tuist/.build` | `spm-<os>-` + `hashFiles(Tuist/Package.resolved, .mise.toml)` |
+| SPM | `Tuist/.build` | `spm-<os>-` + `hashFiles(Tuist/Package.resolved, Tuist/Package.swift, .mise.toml, .xcode-version)` |
 | Pods | `Pods` | `pods-<os>-` + `hashFiles(Podfile.lock)` |
 
 - 두 build job 이 각각 복원한다. 히트하면 `tuist install`·`pod install` 은 네트워크 없이 끝나 중복 설치 시간이 사라진다
@@ -155,8 +155,8 @@ master(태그)에서 `release-x.y.z` 를 분기하는 것만 다르고 나머지
 
 | 트리거 | relay → release 에서 하는 일 | 러너 |
 |---|---|---|
-| develop push 중 `Tuist/Package.resolved`·`Podfile.lock`·`.mise.toml` 변경 | **warm**: 그 커밋을 체크아웃해 `restore-keys` 부분 복원 → 설치 → 새 키로 저장 | macos-26 |
-| cron 일·수 03:00 KST | **keep-alive**: 키 접두사로 최신 캐시를 복원만 한다(접근 = 수명 연장). 2주 사이클 사이의 7일 삭제를 막는다 | ubuntu |
+| develop push 중 `Tuist/Package.resolved`·`Tuist/Package.swift`·`Podfile.lock`·`.mise.toml`·`.xcode-version` 변경 (캐시 키 재료와 동일) | **warm**: 그 커밋을 체크아웃해 `restore-keys` 부분 복원 → 설치 → 새 키로 저장 | macos-26 |
+| cron 월·목 03:00 KST (UTC 일·수 18:00) | **keep-alive**: 키 접두사로 최신 캐시를 복원만 한다(접근 = 수명 연장). 2주 사이클 사이의 7일 삭제를 막는다 | ubuntu |
 | 수동 `gh workflow run cache-warm.yml --ref release -f mode=…` | 위 둘 중 하나 | |
 
 - 이 파일은 **기본 브랜치(dispatch 등록)와 `release`(실행 ref) 양쪽**에 있어야 동작한다. 첫 사이클을 거치면 충족된다
@@ -256,7 +256,7 @@ Info.plist 안에 있으면 QA 수정이 바로 옆 줄을 고쳤을 때 충돌�
 | `Release Finish` 가 실패 | Actions 에서 Re-run. Release 가 이미 있으면 생성은 건너뛰고 브랜치 삭제만 다시 한다 |
 | `Release Finish` 가 돌았는데 Release 가 없음 | master 의 `Version.xcconfig` 버전과 같은 태그가 이미 있었다. 버전이 올라가지 않은 채 머지된 경우다 |
 | `release` 브랜치가 사라짐 | `release → master` PR 머지 후 Delete branch 를 눌렀다. `git push origin origin/master:refs/heads/release` 로 복구한다 (master 가 직전 release 와 같은 내용). 다음 `release-start` 는 그대로 동작 |
-| `Tuist install / generate` 가 `Downloading binary artifact …` 에서 진행 없이 멈춤 (`[n/m]` progress 라인 없음) | SPM 아티팩트 다운로드에 타임아웃이 없어 일시적 네트워크 정지가 영구 hang 이 된다. 2026-10-14 Timespread 6.0.5 첫 Deploy 에서 두 job 모두 17개 아티팩트가 64분간 0바이트. 같은 조합을 샌드박스에서 재현하면 19초에 끝나므로 패키지·러너 문제가 아니다. step 에 `timeout-minutes: 20` 을 둬 빨리 실패시키고 **Re-run failed jobs** |
+| `Tuist install / generate` 가 `Downloading binary artifact …` 에서 진행 없이 멈춤 (`[n/m]` progress 라인 없음) | SPM 아티팩트 다운로드에 타임아웃이 없어 일시적 네트워크 정지가 영구 hang 이 된다. 2026-10-14 Timespread 6.0.5 첫 Deploy 에서 두 job 모두 17개 아티팩트가 64분간 0바이트. 같은 조합을 샌드박스에서 재현하면 19초에 끝나므로 패키지·러너 문제가 아니다. step 에 `timeout-minutes: 60` 을 둬 실패시키고 **Re-run failed jobs**. build job 은 150분(설치 60 ×2 + 빌드) |
 | `Restore … cache` 가 매번 "Cache not found" | 7일 미사용·10GB 초과로 삭제됐거나(정상, 한 번 설치하면 다시 저장) 잠금 파일이 커밋되지 않았다(`Tuist/Package.resolved`, `Podfile.lock` 은 커밋 대상) |
 | `Save … cache` 가 "already exists" 경고 | 다른 build job 이 먼저 저장했다. 정상 |
 | `gh pr merge` 가 "no pull requests found" (`qa-deploy`) | 같은 head 로 열린 PR 이 없다. `make qa-deploy` 를 다시 실행하면 PR 생성부터 한다 |

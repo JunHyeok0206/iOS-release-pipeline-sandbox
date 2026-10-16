@@ -15,12 +15,14 @@ run-name: >-
 on:
   push:
     branches: [develop]
-    paths:
+    paths:   # Deploy 의 캐시 키 재료와 같게 유지한다
       - Tuist/Package.resolved
+      - Tuist/Package.swift
       - Podfile.lock
       - .mise.toml
+      - .xcode-version
   schedule:
-    - cron: '0 18 * * 0,3'   # 일·수 03:00 KST. 간격 3~4일 (7일 미접근 삭제보다 짧게)
+    - cron: '0 18 * * 0,3'   # UTC 일·수 18:00 = KST 월·목 03:00. 간격 3~4일 (7일 미접근 삭제보다 짧게)
   workflow_dispatch:
     inputs:
       mode:
@@ -28,16 +30,15 @@ on:
         options: [warm, keepalive]
         default: warm
       sha:
-        description: '체크아웃할 커밋 (warm). 비우면 ref 의 HEAD'
+        description: '체크아웃할 커밋 (warm). develop 에 머지된 커밋이어야 한다. 비우면 relay 가 develop HEAD 를, release 직접 실행은 release HEAD 를 쓴다'
         type: string
         required: false
 
 permissions:
   contents: read
-  actions: write   # relay 의 self-dispatch
 
 concurrency:
-  group: cache-warm-${{ github.ref }}
+  group: cache-warm-${{ github.ref }}-${{ inputs.mode || 'relay' }}   # keepalive 가 대기 중인 warm 을 밀어내지 않도록 mode 별로
   cancel-in-progress: false
 
 jobs:
@@ -46,14 +47,25 @@ jobs:
     if: github.ref != 'refs/heads/release'
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      actions: write   # self-dispatch
     env:
       GH_TOKEN: ${{ github.token }}
       # cron → keepalive, develop push → warm, 수동 dispatch → 입력값 그대로
       MODE: ${{ github.event_name == 'schedule' && 'keepalive' || (inputs.mode || 'warm') }}
+      # develop push 는 그 커밋. 수동 실행에서 sha 를 비우면 develop HEAD 로 채운다 (master 의 github.sha 는 develop 조상이 아니라 warm 검사에 걸린다)
+      SHA: ${{ inputs.sha || (github.event_name == 'push' && github.sha) || '' }}
     steps:
       - run: |
-          echo "dispatch cache-warm.yml --ref release mode=$MODE sha=${GITHUB_SHA}"
-          gh workflow run cache-warm.yml -R "$GITHUB_REPOSITORY" --ref release -f mode="$MODE" -f sha="$GITHUB_SHA"
+          if [ "$MODE" = "warm" ]; then
+            if [ -z "$SHA" ]; then
+              SHA=$(gh api "repos/$GITHUB_REPOSITORY/commits/develop" --jq .sha)
+              echo "sha 미지정 → develop HEAD $SHA"
+            fi
+            echo "$SHA" | grep -Eq '^[0-9a-f]{40}$' || { echo "::error::sha 는 40자리 커밋 해시여야 합니다: $SHA"; exit 1; }
+          fi
+          echo "dispatch cache-warm.yml --ref release mode=$MODE sha=$SHA"
+          gh workflow run cache-warm.yml -R "$GITHUB_REPOSITORY" --ref release -f mode="$MODE" -f sha="$SHA"
 
   keepalive:
     if: github.ref == 'refs/heads/release' && inputs.mode == 'keepalive'
@@ -75,12 +87,34 @@ jobs:
   warm:
     if: github.ref == 'refs/heads/release' && inputs.mode == 'warm'
     runs-on: macos-26
-    timeout-minutes: 60
+    timeout-minutes: 150   # 설치 step 60분 ×2 + 여유
+    env:
+      SHA: ${{ inputs.sha || github.sha }}
     steps:
+      # sha 를 지정했으면 origin/develop 의 조상(머지된 커밋)이어야 한다. 비우면 release HEAD 라 검사하지 않는다
+      - name: Verify sha is on develop
+        if: inputs.sha != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          echo "$SHA" | grep -Eq '^[0-9a-f]{40}$' || { echo "::error::sha 는 40자리 커밋 해시여야 합니다: $SHA"; exit 1; }
+          STATUS=$(gh api "repos/$GITHUB_REPOSITORY/compare/$SHA...develop" --jq .status)
+          case "$STATUS" in
+            ahead|identical) echo "$SHA 는 develop 에 포함된 커밋 ($STATUS)" ;;
+            *) echo "::error::$SHA 는 develop 의 조상이 아닙니다 (compare status: $STATUS). develop 에 머지된 커밋만 warm 할 수 있습니다"; exit 1 ;;
+          esac
+
       - uses: actions/checkout@v5
         with:
           ref: ${{ inputs.sha || github.sha }}   # develop 의 잠금 파일 커밋. 캐시 범위는 run 의 ref(release)
           persist-credentials: false
+
+      # Deploy 와 같은 Xcode 로 설치해야 SPM 캐시(툴체인 민감)가 호환된다. 버전의 단일 출처는 .xcode-version
+      - id: xcode
+        run: echo "version=$(cat .xcode-version)" >> "$GITHUB_OUTPUT"
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: ${{ steps.xcode.outputs.version }}
 
       - uses: ruby/setup-ruby@v1
         with:
@@ -95,7 +129,7 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: Tuist/.build
-          key: spm-${{ runner.os }}-${{ hashFiles('Tuist/Package.resolved', '.mise.toml') }}
+          key: spm-${{ runner.os }}-${{ hashFiles('Tuist/Package.resolved', 'Tuist/Package.swift', '.mise.toml', '.xcode-version') }}
           restore-keys: spm-${{ runner.os }}-
 
       - name: Restore Pods cache
@@ -108,13 +142,14 @@ jobs:
 
       # SPM 의 바이너리 아티팩트 다운로드에는 타임아웃이 없어 일시적 네트워크 정지가 영구 hang 이 된다 (Timespread 6.0.5 첫 Deploy, 64분). 빨리 실패시키고 Re-run 한다
       - name: Tuist install / generate
-        timeout-minutes: 20
+        timeout-minutes: 60
         if: steps.spm-cache.outputs.cache-hit != 'true' || steps.pods-cache.outputs.cache-hit != 'true'
         run: |
           mise x -- tuist install
           mise x -- tuist generate --no-open
 
       - name: Pod install
+        timeout-minutes: 60
         if: steps.pods-cache.outputs.cache-hit != 'true'
         run: bundle exec pod install
 
